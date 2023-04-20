@@ -1,9 +1,14 @@
 import React, { useEffect, useState, useContext } from "react";
-import { IoVideocam } from "react-icons/io5";
 import { HiMicrophone } from "react-icons/hi";
-import { IoExitOutline } from "react-icons/io5";
+import { TbScreenShare } from "react-icons/tb";
+import {
+  IoExitOutline,
+  IoCopyOutline,
+  IoVideocam,
+  IoChatboxOutline,
+} from "react-icons/io5";
+import { ReduxContext, SocketContext } from "../store/reduxContextWrapper";
 import { useNavigate } from "react-router-dom";
-import { ReduxContext } from "../store/reduxContextWrapper";
 
 export const Sidebar = () => {
   const [trackStatus, setTrackStatus] = useState({
@@ -11,7 +16,8 @@ export const Sidebar = () => {
     audio: true,
   });
   const [state, dispatch] = useContext(ReduxContext);
-  const { localStream } = state;
+  const { leaveRoomFunc } = useContext(SocketContext);
+  const { localStream, roomID } = state;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -21,8 +27,8 @@ export const Sidebar = () => {
   }, []);
 
   const leaveRoom = () => {
-    dispatch({ type: "LEAVE_ROOM" });
-    navigate()("/");
+    leaveRoomFunc("Hello");
+    navigate("/");
   };
 
   const toggleTrack = (kind) => {
@@ -32,28 +38,51 @@ export const Sidebar = () => {
     setTrackStatus({ ...trackStatus, [kind]: !trackStatus[kind] });
   };
 
+  const copyRoomLink = () => {
+    const roomLink = `http://localhost:5173/room/${roomID}`;
+    navigator.clipboard.writeText(roomLink);
+  };
+
   return (
-    <div className="h-full w-full flex flex-col items-center justify-center">
-      <button
-        className="m-2 text-2xl shadow-2xl"
-        style={{ background: trackStatus.video ? "red" : "blue" }}
-        onClick={() => toggleTrack("video")}
-      >
-        <IoVideocam />
-      </button>
-      <button
-        className="m-2 text-2xl shadow-2xl"
-        style={{ background: trackStatus.audio ? "red" : "blue" }}
-        onClick={() => toggleTrack("audio")}
-      >
-        <HiMicrophone />
-      </button>
-      <button
-        className="m-2 text-2xl shadow-2xl bg-red-700"
-        onClick={leaveRoom}
-      >
-        <IoExitOutline />
-      </button>
+    <div className="h-full w-full flex flex-row justify-between items-center text-white">
+      <div className="">
+        <button
+          className="m-2 p-3 text-center text-3xl rounded-full shadow-2xl"
+          onClick={copyRoomLink}
+        >
+          <IoCopyOutline />
+        </button>
+      </div>
+      <div className="flex">
+        <button
+          className="m-2 p-4 text-1xl shadow-2xl rounded-full "
+          style={{ background: trackStatus.video ? "red" : "" }}
+          onClick={() => toggleTrack("video")}
+        >
+          <IoVideocam />
+        </button>
+        <button
+          className="m-2 p-4 text-1xl shadow-4xl rounded-full "
+          style={{ background: trackStatus.audio ? "red" : "" }}
+          onClick={() => toggleTrack("audio")}
+        >
+          <HiMicrophone />
+        </button>
+      </div>
+      <div className="flex">
+        <button className="m-2 p-4 text-1xl shadow-2xl rounded-full ">
+          <TbScreenShare />
+        </button>
+        <button className="m-2 p-4 text-1xl shadow-2xl rounded-full ">
+          <IoChatboxOutline />
+        </button>
+        <button
+          className="m-2 p-4 text-1xl shadow-2xl bg-red-700 rounded-full "
+          onClick={leaveRoom}
+        >
+          <IoExitOutline />
+        </button>
+      </div>
     </div>
   );
 };

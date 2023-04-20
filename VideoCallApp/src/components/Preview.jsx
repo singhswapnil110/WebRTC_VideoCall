@@ -1,15 +1,17 @@
-import React, { useContext } from "react";
+import React, { useContext, useState } from "react";
 import { useParams } from "react-router-dom";
-import { ReduxContext } from "../store/reduxContextWrapper";
+import { ReduxContext, SocketContext } from "../store/reduxContextWrapper";
 import { VideoTile } from "./VideoTile";
 
 export const Preview = ({ setConnected }) => {
   const { roomID } = useParams();
-  const [state, dispatch] = useContext(ReduxContext);
+  const [first, setFirst] = useState(0);
+  const state = useContext(ReduxContext)[0];
+  const { joinRoomFunc } = useContext(SocketContext);
   const { localStream } = state;
 
   const joinRoom = () => {
-    dispatch({ type: "JOIN_ROOM", payload: roomID });
+    joinRoomFunc(roomID);
     setConnected(true);
   };
 
@@ -26,6 +28,7 @@ export const Preview = ({ setConnected }) => {
           <button className="m-2" onClick={joinRoom}>
             Join Meeting
           </button>
+          <button onClick={() => setFirst(first + 1)}></button>
         </div>
       </section>
     </div>

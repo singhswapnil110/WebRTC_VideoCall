@@ -8,11 +8,9 @@ export const VideoTile = ({ stream }) => {
     videoRef.current.play();
   }, [stream]);
 
-  console.log(stream);
-
   return (
-    <div className="object-contain p-4 bg-gray-200 max-w-lg shadow-lg">
-      <video ref={videoRef} muted className="rounded-xl" />
+    <div className="m-2 p-2 bg-gray-200 shadow-lg">
+      <video ref={videoRef} className="rounded-xl" muted />
     </div>
   );
 };

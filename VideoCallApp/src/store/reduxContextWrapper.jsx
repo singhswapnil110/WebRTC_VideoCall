@@ -1,18 +1,27 @@
-import { createContext, useRef, useEffect, useReducer } from "react";
+import {
+  createContext,
+  useRef,
+  useEffect,
+  useReducer,
+  useCallback,
+  useLayoutEffect,
+} from "react";
 import { io } from "socket.io-client";
 import Peer from "peerjs";
+import { reducerFun } from "./reducer";
 
 export const ReduxContext = createContext();
+export const SocketContext = createContext();
 
 export const ReduxContextWrapper = ({ children }) => {
-  let { current: socket } = useRef(io("http://localhost:8002/"));
-  let { current: peer } = useRef(new Peer());
+  let { current: socket } = useRef();
+  let { current: peer } = useRef(null);
   const [state, dispatch] = useReducer(reducerFun, initialState);
   const { localStream } = state;
 
   useEffect(() => {
-    //peer = new Peer();
-    //socket = ;
+    peer = new Peer();
+    socket = io("http://localhost:8002/");
 
     socket.on("user_joined", ({ userID }) => {
       const call = peer.call(userID, localStream);
@@ -39,56 +48,24 @@ export const ReduxContextWrapper = ({ children }) => {
     };
   }, [localStream]);
 
-  function reducerFun(state, action) {
-    switch (action.type) {
-      case "SET_LOCAL_STREAM":
-        return {
-          ...state,
-          localStream: action.payload,
-        };
+  const joinRoomFunc = (roomID) => {
+    socket.emit("join_room", { roomID: roomID, userID: peer.id });
+    dispatch({ type: "SET_ROOM", payload: roomID });
+  };
 
-      case "JOIN_ROOM":
-        socket.emit("join_room", { roomID: action.payload, userID: peer.id });
-        return {
-          ...state,
-          roomID: action.payload,
-        };
-
-      case "ADD_CONNECTION":
-        let call = action.payload;
-        return {
-          ...state,
-          connections: {
-            ...state.connections,
-            [call.peer]: call,
-          },
-        };
-
-      case "REMOVE_CONNECTION":
-        let peerID = action.payload;
-        state.connections[peerID]?.close();
-        let updatedConn = { ...state.connections };
-        delete updatedConn[peerID];
-        return {
-          ...state,
-          connections: updatedConn,
-        };
-
-      case "LEAVE_ROOM":
-        socket.emit("user_disconnect", {
-          userID: peer.id,
-          roomID: state.roomID,
-        });
-        return {
-          ...state,
-          roomID: null,
-        };
-    }
-  }
+  const leaveRoomFunc = () => {
+    socket.emit("user_disconnect", {
+      userID: peer.id,
+      roomID: state.roomID,
+    });
+    dispatch({ type: "LEAVE_ROOM" });
+  };
 
   return (
     <ReduxContext.Provider value={[state, dispatch]}>
-      {children}
+      <SocketContext.Provider value={{ joinRoomFunc, leaveRoomFunc }}>
+        {children}
+      </SocketContext.Provider>
     </ReduxContext.Provider>
   );
 };
@@ -97,4 +74,6 @@ const initialState = {
   localStream: null,
   connections: {},
   roomID: null,
+  name: "",
+  messages: [],
 };
