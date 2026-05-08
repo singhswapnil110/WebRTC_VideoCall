@@ -1,7 +1,7 @@
 import React, { useContext, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
-import { ReduxContext } from "../store/reduxContextWrapper";
+import { ReduxContext } from "../redux/reduxContextWrapper";
 
 export const Home = () => {
   const navigate = useNavigate();
@@ -16,10 +16,10 @@ export const Home = () => {
   const inputRef = useRef();
 
   return (
-    <div className="h-full w-full flex flex-wrap bg-gradient-to-tr from-gray-700 via-gray-900 to-black">
-      <div className="w-full h-1/2 flex flex-col items-center justify-evenly ">
+    <div className="h-full w-full flex flex-wrap bg-white">
+      <div className="w-full h-1/2 flex flex-col items-center justify-evenly">
         <h1 className="font-extrabold text-transparent text-8xl bg-clip-text bg-gradient-to-r from-violet-800 to-pink-400">
-          Video Meet
+          Sum वाद
         </h1>
         <p className="text-2xl">
           Create or join meets with friends, family and colleagues

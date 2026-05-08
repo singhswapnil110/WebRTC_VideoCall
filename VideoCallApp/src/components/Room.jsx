@@ -1,15 +1,12 @@
 import React, { useContext } from "react";
-import { ReduxContext } from "../store/reduxContextWrapper";
+import { ReduxContext } from "../redux/reduxContextWrapper";
 import { VideoTile } from "./VideoTile";
 
 const gridLayout = (length) => {
   for (let i = 1; i < 6; i++)
     for (let j = i; j <= i + 1; j++)
-      if (i * j >= length)
-        return {
-          rows: i,
-          columns: j,
-        };
+      if (i * j >= length) return { rows: i, columns: j };
+  return { rows: 5, columns: 6 };
 };
 
 export const Room = () => {

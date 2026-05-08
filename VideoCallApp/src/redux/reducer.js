@@ -1,5 +1,4 @@
 export function reducerFun(state, action) {
-  console.log(this);
   switch (action.type) {
     case "SET_LOCAL_STREAM":
       return {
@@ -13,8 +12,8 @@ export function reducerFun(state, action) {
         roomID: action.payload,
       };
 
-    case "ADD_CONNECTION":
-      let call = action.payload;
+    case "ADD_CONNECTION": {
+      const call = action.payload;
       return {
         ...state,
         connections: {
@@ -22,16 +21,18 @@ export function reducerFun(state, action) {
           [call.peer]: call,
         },
       };
+    }
 
-    case "REMOVE_CONNECTION":
-      let peerID = action.payload;
+    case "REMOVE_CONNECTION": {
+      const peerID = action.payload;
       state.connections[peerID]?.close();
-      let updatedConn = { ...state.connections };
+      const updatedConn = { ...state.connections };
       delete updatedConn[peerID];
       return {
         ...state,
         connections: updatedConn,
       };
+    }
 
     case "LEAVE_ROOM":
       return {

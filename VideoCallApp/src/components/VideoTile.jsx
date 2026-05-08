@@ -4,6 +4,7 @@ export const VideoTile = ({ stream }) => {
   let videoRef = useRef();
 
   useEffect(() => {
+    if (!stream) return;
     videoRef.current.srcObject = stream;
     videoRef.current.play();
   }, [stream]);
