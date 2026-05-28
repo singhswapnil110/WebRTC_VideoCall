@@ -14,11 +14,15 @@ export const Room = () => {
   const { rows, columns } = gridLayout(Object.keys(connections).length + 1);
   return (
     <div
-      className={`h-full w-full bg-white grid grid-cols-${columns} grid-rows-${rows} items-center justify-center`}
+      className="h-full w-full grid items-center justify-center bg-white"
+      style={{
+        gridTemplateColumns: `repeat(${columns}, 1fr)`,
+        gridTemplateRows: `repeat(${rows}, 1fr)`,
+      }}
     >
       <VideoTile stream={localStream} />
-      {Object.values(connections).map((conn, index) => (
-        <VideoTile key={index} stream={conn.remoteStream} />
+      {Object.values(connections).map((conn) => (
+        <VideoTile key={conn.peer} stream={conn.remoteStream} />
       ))}
     </div>
   );
