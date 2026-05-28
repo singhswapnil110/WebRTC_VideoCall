@@ -6,7 +6,7 @@ import { VideoTile } from "./VideoTile";
 export const Preview = ({ setConnected }) => {
   const { roomID } = useParams();
   const state = useContext(ReduxContext)[0];
-  const { joinRoomFunc } = useContext(SocketContext);
+  const { joinRoomFunc, peerReady } = useContext(SocketContext);
   const { localStream } = state;
 
   const joinRoom = () => {
@@ -23,7 +23,11 @@ export const Preview = ({ setConnected }) => {
 
         <div className="flex flex-col h-2/3 justify-center">
           <input className="bg-transparent text-black text-2xl border-b-2 border-red-900 m-4 w-72 " />
-          <button className="m-2" onClick={joinRoom}>
+          <button
+            className="m-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={joinRoom}
+            disabled={!localStream || !peerReady}
+          >
             Join Meeting
           </button>
         </div>
