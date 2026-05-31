@@ -45,6 +45,9 @@ export const ReduxContextWrapper = ({ children }) => {
       call.on("stream", () =>
         dispatch({ type: "ADD_CONNECTION", payload: call })
       );
+      call.on("close", () =>
+        dispatch({ type: "REMOVE_CONNECTION", payload: call.peer })
+      );
     });
 
     peerRef.current.on("call", (call) => {
@@ -52,6 +55,9 @@ export const ReduxContextWrapper = ({ children }) => {
       call.answer(localStreamRef.current);
       call.on("stream", () =>
         dispatch({ type: "ADD_CONNECTION", payload: call })
+      );
+      call.on("close", () =>
+        dispatch({ type: "REMOVE_CONNECTION", payload: call.peer })
       );
     });
 
