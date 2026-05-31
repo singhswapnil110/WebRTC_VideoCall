@@ -9,21 +9,23 @@ export const Meeting = () => {
   const dispatch = useContext(ReduxContext)[1];
   const streamRef = useRef(null);
 
-  const getUserVideo = () => {
+  useEffect(() => {
+    let mounted = true;
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream) => {
+        if (!mounted) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         streamRef.current = stream;
         dispatch({ type: "SET_LOCAL_STREAM", payload: stream });
       })
       .catch((err) => {
         console.error("Camera/microphone access denied:", err);
       });
-  };
-
-  useEffect(() => {
-    getUserVideo();
     return () => {
+      mounted = false;
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
