@@ -55,16 +55,18 @@ export const Sidebar = () => {
       </div>
       <div className="flex">
         <button
-          className="m-2 p-4 text-1xl shadow-2xl rounded-full"
+          className="m-2 p-4 text-1xl shadow-2xl rounded-full disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: trackStatus.video ? "red" : "" }}
           onClick={() => toggleTrack("video")}
+          disabled={!localStream}
         >
           <IoVideocam />
         </button>
         <button
-          className="m-2 p-4 text-1xl shadow-4xl rounded-full"
+          className="m-2 p-4 text-1xl shadow-4xl rounded-full disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: trackStatus.audio ? "red" : "" }}
           onClick={() => toggleTrack("audio")}
+          disabled={!localStream}
         >
           <HiMicrophone />
         </button>
