@@ -40,7 +40,9 @@ export const Sidebar = () => {
 
   const copyRoomLink = () => {
     const roomLink = `${window.location.origin}/room/${roomID}`;
-    navigator.clipboard.writeText(roomLink);
+    navigator.clipboard.writeText(roomLink).catch((err) => {
+      console.error("Failed to copy room link:", err);
+    });
   };
 
   return (
