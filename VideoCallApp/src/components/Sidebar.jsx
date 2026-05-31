@@ -10,7 +10,7 @@ import {
 import { ReduxContext, SocketContext } from "../redux/reduxContextWrapper";
 import { useNavigate } from "react-router-dom";
 
-export const Sidebar = () => {
+export const Sidebar = ({ isPreview }) => {
   const [trackStatus, setTrackStatus] = useState({ video: true, audio: true });
   const [state] = useContext(ReduxContext);
   const { leaveRoomFunc } = useContext(SocketContext);
@@ -46,45 +46,69 @@ export const Sidebar = () => {
   };
 
   return (
-    <div className="h-full w-full flex flex-row justify-between items-center text-white">
-      <div>
+    <div className="sidebar-slot">
+      <div className="sidebar-pill">
+        {/* Copy link */}
         <button
-          className="m-2 p-3 text-center text-3xl rounded-full shadow-2xl"
+          className="sb-btn"
+          data-tip="Copy link"
           onClick={copyRoomLink}
         >
-          <IoCopyOutline />
+          <IoCopyOutline size={18} />
         </button>
-      </div>
-      <div className="flex">
+
+        <div className="sb-sep" />
+
+        {/* Video toggle */}
         <button
-          className="m-2 p-4 text-1xl shadow-2xl rounded-full disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ background: trackStatus.video ? "red" : "" }}
+          className={`sb-btn ${!trackStatus.video ? "off" : "active"}`}
+          data-tip={trackStatus.video ? "Turn off camera" : "Turn on camera"}
           onClick={() => toggleTrack("video")}
           disabled={!localStream}
         >
-          <IoVideocam />
+          <IoVideocam size={18} />
         </button>
+
+        {/* Mic toggle */}
         <button
-          className="m-2 p-4 text-1xl shadow-4xl rounded-full disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ background: trackStatus.audio ? "red" : "" }}
+          className={`sb-btn ${!trackStatus.audio ? "off" : "active"}`}
+          data-tip={trackStatus.audio ? "Mute" : "Unmute"}
           onClick={() => toggleTrack("audio")}
           disabled={!localStream}
         >
-          <HiMicrophone />
+          <HiMicrophone size={18} />
         </button>
-      </div>
-      <div className="flex">
-        <button className="m-2 p-4 text-1xl shadow-2xl rounded-full">
-          <TbScreenShare />
-        </button>
-        <button className="m-2 p-4 text-1xl shadow-2xl rounded-full">
-          <IoChatboxOutline />
-        </button>
+
+        <div className="sb-sep" />
+
+        {/* Screen share (placeholder) */}
         <button
-          className="m-2 p-4 text-1xl shadow-2xl bg-red-700 rounded-full"
-          onClick={leaveRoom}
+          className="sb-btn"
+          data-tip="Share screen"
+          disabled={isPreview}
         >
-          <IoExitOutline />
+          <TbScreenShare size={18} />
+        </button>
+
+        {/* Chat (placeholder) */}
+        <button
+          className="sb-btn"
+          data-tip="Chat"
+          disabled={isPreview}
+        >
+          <IoChatboxOutline size={18} />
+        </button>
+
+        <div className="sb-sep" />
+
+        {/* Leave */}
+        <button
+          className="sb-btn danger"
+          data-tip="Leave"
+          onClick={leaveRoom}
+          disabled={isPreview}
+        >
+          <IoExitOutline size={18} />
         </button>
       </div>
     </div>

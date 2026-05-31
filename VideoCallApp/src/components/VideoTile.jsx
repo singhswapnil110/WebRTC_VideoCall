@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 
 export const VideoTile = ({ stream }) => {
-  let videoRef = useRef();
+  const videoRef = useRef();
 
   useEffect(() => {
     if (!stream) return;
@@ -9,8 +9,12 @@ export const VideoTile = ({ stream }) => {
   }, [stream]);
 
   return (
-    <div className="m-2 p-2 bg-gray-200 shadow-lg">
-      <video ref={videoRef} className="rounded-xl" autoPlay muted playsInline />
-    </div>
+    <video
+      ref={videoRef}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+      autoPlay
+      muted
+      playsInline
+    />
   );
 };

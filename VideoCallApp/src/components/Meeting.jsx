@@ -31,12 +31,14 @@ export const Meeting = () => {
   }, []);
 
   return (
-    <div className="h-full w-full flex flex-col items-center bg-orange-50 box-border">
-      <div className="w-full h-24 flex grow bg-black">
-        {isConnected ? <Room /> : <Preview setConnected={setConnected} />}
-      </div>
-      <div className="w-full h-24 bg-silver-400">
-        <Sidebar />
+    <div className="meeting-page">
+      <Sidebar isPreview={!isConnected} />
+      <div className="meeting-main-area">
+        {isConnected ? (
+          <Room />
+        ) : (
+          <Preview setConnected={setConnected} />
+        )}
       </div>
     </div>
   );

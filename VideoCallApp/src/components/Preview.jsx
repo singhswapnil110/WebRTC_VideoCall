@@ -15,28 +15,47 @@ export const Preview = ({ setConnected }) => {
     setConnected(true);
   };
 
-  return (
-    <div className="w-full h-full flex flex-col sm:flex-row bg-slate-50">
-      <section className="sm:w-1/2 sm:h-full w-full h-1/2 flex flex-col justify-center items-center bg-silver-600 p-12">
-        <VideoTile stream={localStream} />
-      </section>
-      <section className="sm:w-1/2 sm:h-full w-full h-1/2  flex flex-col justify-evenly items-center">
+  const initial = name.trim()[0]?.toUpperCase() ?? "?";
 
-        <div className="flex flex-col h-2/3 justify-center">
-          <input
-            className="bg-transparent text-black text-2xl border-b-2 border-red-900 m-4 w-72"
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <button
-            className="m-2 disabled:opacity-40 disabled:cursor-not-allowed"
-            onClick={joinRoom}
-            disabled={!localStream || !peerReady || !name.trim()}
-          >
-            Join Meeting
-          </button>
+  return (
+    <div className="preview-page">
+      {/* Camera preview */}
+      <section className="preview-cam-section">
+        <div className="cam-frame">
+          <div className="cam-screen">
+            {localStream ? (
+              <VideoTile stream={localStream} />
+            ) : (
+              <div className="cam-avatar-lg">{initial}</div>
+            )}
+          </div>
         </div>
+      </section>
+
+      {/* Join panel */}
+      <section className="preview-info-section">
+        <div className="preview-name-label">Your name</div>
+        <input
+          className="preview-name-input"
+          placeholder="Enter your name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <button
+          className="preview-join-btn"
+          onClick={joinRoom}
+          disabled={!localStream || !peerReady || !name.trim()}
+        >
+          Join Meeting
+          <svg
+            width="13" height="13" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5"
+            strokeLinecap="round" strokeLinejoin="round"
+          >
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="12 5 19 12 12 19" />
+          </svg>
+        </button>
       </section>
     </div>
   );
