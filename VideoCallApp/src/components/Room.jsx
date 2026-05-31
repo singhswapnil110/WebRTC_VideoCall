@@ -9,7 +9,6 @@ const gridLayout = (length) => {
   return { rows: 5, columns: 6 };
 };
 
-// Derive a hue from a string for consistent avatar colors per peer
 const peerHue = (id = "") => {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffffff;
@@ -30,7 +29,6 @@ export const Room = () => {
           gridTemplateRows: `repeat(${rows}, 1fr)`,
         }}
       >
-        {/* Local tile */}
         <div className="v-tile">
           {localStream ? (
             <VideoTile stream={localStream} />
@@ -45,7 +43,6 @@ export const Room = () => {
           <span className="v-name">You</span>
         </div>
 
-        {/* Remote tiles */}
         {peerList.map((conn) => {
           const hue = peerHue(conn.peer);
           const shortId = conn.peer?.slice(-4)?.toUpperCase() ?? "??";

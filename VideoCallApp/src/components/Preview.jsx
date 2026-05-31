@@ -19,7 +19,6 @@ export const Preview = ({ setConnected }) => {
 
   return (
     <div className="preview-page">
-      {/* Camera preview */}
       <section className="preview-cam-section">
         <div className="cam-frame">
           <div className="cam-screen">
@@ -32,7 +31,6 @@ export const Preview = ({ setConnected }) => {
         </div>
       </section>
 
-      {/* Join panel */}
       <section className="preview-info-section">
         <div className="preview-name-label">Your name</div>
         <input

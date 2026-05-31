@@ -48,7 +48,6 @@ export const Sidebar = ({ isPreview }) => {
   return (
     <div className="sidebar-slot">
       <div className="sidebar-pill">
-        {/* Copy link */}
         <button
           className="sb-btn"
           data-tip="Copy link"
@@ -59,7 +58,6 @@ export const Sidebar = ({ isPreview }) => {
 
         <div className="sb-sep" />
 
-        {/* Video toggle */}
         <button
           className={`sb-btn ${!trackStatus.video ? "off" : "active"}`}
           data-tip={trackStatus.video ? "Turn off camera" : "Turn on camera"}
@@ -69,7 +67,6 @@ export const Sidebar = ({ isPreview }) => {
           <IoVideocam size={18} />
         </button>
 
-        {/* Mic toggle */}
         <button
           className={`sb-btn ${!trackStatus.audio ? "off" : "active"}`}
           data-tip={trackStatus.audio ? "Mute" : "Unmute"}
@@ -81,7 +78,6 @@ export const Sidebar = ({ isPreview }) => {
 
         <div className="sb-sep" />
 
-        {/* Screen share (placeholder) */}
         <button
           className="sb-btn"
           data-tip="Share screen"
@@ -90,7 +86,6 @@ export const Sidebar = ({ isPreview }) => {
           <TbScreenShare size={18} />
         </button>
 
-        {/* Chat (placeholder) */}
         <button
           className="sb-btn"
           data-tip="Chat"
@@ -101,7 +96,6 @@ export const Sidebar = ({ isPreview }) => {
 
         <div className="sb-sep" />
 
-        {/* Leave */}
         <button
           className="sb-btn danger"
           data-tip="Leave"

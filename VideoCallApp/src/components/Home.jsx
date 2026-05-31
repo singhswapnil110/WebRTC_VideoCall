@@ -13,21 +13,17 @@ export const Home = () => {
 
   return (
     <div className="home-page">
-      {/* Nav */}
       <nav className="home-nav">
         <div className="brand">
           Sum<span className="brand-accent">वाद</span>
         </div>
       </nav>
 
-      {/* Body */}
       <div className="home-body">
-        {/* Fluid gradient blobs */}
         <div className="fluid-blob b1" />
         <div className="fluid-blob b2" />
         <div className="fluid-blob b3" />
 
-        {/* Hero */}
         <div style={{ textAlign: "center", maxWidth: 560, position: "relative", zIndex: 1 }}>
           <h1 className="hero-title">
             Video calls,<br />
@@ -39,9 +35,7 @@ export const Home = () => {
           </p>
         </div>
 
-        {/* Glass action card */}
         <div className="home-sections" style={{ position: "relative", zIndex: 1 }}>
-          {/* Create a room */}
           <div className="home-section-col">
             <div className="section-label">Create a room</div>
             <button
@@ -62,7 +56,6 @@ export const Home = () => {
 
           <div className="section-divider" />
 
-          {/* Join a room */}
           <div className="home-section-col">
             <div className="section-label">Join a room</div>
             <form
