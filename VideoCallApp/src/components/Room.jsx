@@ -9,21 +9,62 @@ const gridLayout = (length) => {
   return { rows: 5, columns: 6 };
 };
 
+const peerHue = (id = "") => {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffffff;
+  return h % 360;
+};
+
 export const Room = () => {
   const { connections, localStream } = useContext(ReduxContext)[0];
-  const { rows, columns } = gridLayout(Object.keys(connections).length + 1);
+  const peerList = Object.values(connections);
+  const { rows, columns } = gridLayout(peerList.length + 1);
+
   return (
-    <div
-      className="h-full w-full grid items-center justify-center bg-white"
-      style={{
-        gridTemplateColumns: `repeat(${columns}, 1fr)`,
-        gridTemplateRows: `repeat(${rows}, 1fr)`,
-      }}
-    >
-      <VideoTile stream={localStream} />
-      {Object.values(connections).map((conn) => (
-        <VideoTile key={conn.peer} stream={conn.remoteStream} />
-      ))}
+    <div className="meeting-room-bg">
+      <div
+        className="video-grid-wrap"
+        style={{
+          gridTemplateColumns: `repeat(${columns}, 1fr)`,
+          gridTemplateRows: `repeat(${rows}, 1fr)`,
+        }}
+      >
+        <div className="v-tile">
+          {localStream ? (
+            <VideoTile stream={localStream} />
+          ) : (
+            <div
+              className="v-avatar"
+              style={{ background: `linear-gradient(135deg, hsl(260,70%,40%), hsl(280,80%,65%))` }}
+            >
+              Me
+            </div>
+          )}
+          <span className="v-name">You</span>
+        </div>
+
+        {peerList.map((conn) => {
+          const hue = peerHue(conn.peer);
+          const shortId = conn.peer?.slice(-4)?.toUpperCase() ?? "??";
+          return (
+            <div key={conn.peer} className="v-tile">
+              {conn.remoteStream ? (
+                <VideoTile stream={conn.remoteStream} />
+              ) : (
+                <div
+                  className="v-avatar"
+                  style={{
+                    background: `linear-gradient(135deg, hsl(${hue},65%,35%), hsl(${(hue + 30) % 360},75%,60%))`,
+                  }}
+                >
+                  {shortId}
+                </div>
+              )}
+              <span className="v-name">{shortId}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

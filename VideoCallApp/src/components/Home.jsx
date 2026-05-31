@@ -12,34 +12,71 @@ export const Home = () => {
   };
 
   return (
-    <div className="h-full w-full flex flex-wrap bg-white">
-      <div className="w-full h-1/2 flex flex-col items-center justify-evenly">
-        <h1 className="font-extrabold text-transparent text-8xl bg-clip-text bg-gradient-to-r from-violet-800 to-pink-400">
-          Sum वाद
-        </h1>
-        <p className="text-2xl">
-          Create or join meets with friends, family and colleagues
-        </p>
-      </div>
-      <div className="h-1/2 w-1/2 flex items-center justify-center">
-        <button
-          className="bg-violet-900 text-white w-60 h-16"
-          onClick={() => navigateToRoom()}
-        >
-          Create Room
-        </button>
-      </div>
-      <div className="h-1/2 w-1/2 flex flex-col items-center justify-center">
-        <form onSubmit={(e) => { e.preventDefault(); navigateToRoom(inputRef.current.value.trim()); }}>
-          <input
-            ref={inputRef}
-            required
-            className="bg-transparent border-b-2 border-red-900 m-4 w-96 text-2xl p-4"
-          />
-          <button type="submit" className="bg-white text-violet-900 m-4 w-60">
-            Join Room
-          </button>
-        </form>
+    <div className="home-page">
+      <nav className="home-nav">
+        <div className="brand">
+          Sum<span className="brand-accent">वाद</span>
+        </div>
+      </nav>
+
+      <div className="home-body">
+        <div className="fluid-blob b1" />
+        <div className="fluid-blob b2" />
+        <div className="fluid-blob b3" />
+
+        <div style={{ textAlign: "center", maxWidth: 560, position: "relative", zIndex: 1 }}>
+          <h1 className="hero-title">
+            Video calls,<br />
+            <span className="hero-accent">minus the noise.</span>
+          </h1>
+          <p className="hero-sub">
+            Create a room in one click. Share the link. Everyone joins
+            instantly — no accounts, no installs, no friction.
+          </p>
+        </div>
+
+        <div className="home-sections" style={{ position: "relative", zIndex: 1 }}>
+          <div className="home-section-col">
+            <div className="section-label">Create a room</div>
+            <button
+              className="btn-primary"
+              onClick={() => navigateToRoom()}
+            >
+              <svg
+                width="15" height="15" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.5"
+                strokeLinecap="round" strokeLinejoin="round"
+              >
+                <polygon points="23 7 16 12 23 17 23 7" />
+                <rect x="1" y="5" width="15" height="14" rx="2" />
+              </svg>
+              New Meeting
+            </button>
+          </div>
+
+          <div className="section-divider" />
+
+          <div className="home-section-col">
+            <div className="section-label">Join a room</div>
+            <form
+              style={{ display: "flex", gap: 8 }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                navigateToRoom(inputRef.current.value.trim());
+              }}
+            >
+              <input
+                ref={inputRef}
+                required
+                className="field-input"
+                placeholder="Paste room code…"
+              />
+              <button type="submit" className="btn-secondary">
+                Join
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   );
