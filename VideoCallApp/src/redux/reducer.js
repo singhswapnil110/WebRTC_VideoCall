@@ -38,6 +38,7 @@ export function reducerFun(state, action) {
       return {
         ...state,
         roomID: null,
+        connections: {},
       };
 
     default:
