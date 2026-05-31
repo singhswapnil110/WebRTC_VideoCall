@@ -20,13 +20,20 @@ server.listen(PORT, () => console.log(`Server started at PORT:${PORT}`));
 io.on("connection", (socket) => {
   socket.on("join_room", ({ roomID, userID }) => {
     socket.join(roomID);
-    socket.to(roomID).emit("user_joined", {
-      userID: userID,
-    });
+    socket.data.userID = userID;
+    socket.to(roomID).emit("user_joined", { userID });
   });
 
   socket.on("user_disconnect", ({ userID, roomID }) => {
-    socket.to(roomID).emit("user_disconnected", { userID: userID });
+    socket.to(roomID).emit("user_disconnected", { userID });
     socket.leave(roomID);
+  });
+
+  socket.on("disconnecting", () => {
+    for (const room of socket.rooms) {
+      if (room !== socket.id) {
+        socket.to(room).emit("user_disconnected", { userID: socket.data.userID });
+      }
+    }
   });
 });

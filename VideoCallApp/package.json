@@ -9,13 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "peerjs": "1.4.7",
+    "peerjs": "1.5.4",
     "react": "experimental",
     "react-dom": "experimental",
-    "react-icons": "^4.8.0",
+    "react-icons": "latest",
     "react-router-dom": "latest",
-    "socket.io-client": "^4.6.1",
-    "uuid": "^9.0.0"
+    "socket.io-client": "^4.7.5",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@types/react": "^18.0.27",
