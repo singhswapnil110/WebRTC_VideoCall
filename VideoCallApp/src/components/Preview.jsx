@@ -1,18 +1,40 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { ReduxContext, SocketContext } from "../redux/reduxContextWrapper";
 import { VideoTile } from "./VideoTile";
 import { BoyAvatar } from "./CharacterAvatars";
 import { RpGirlAvatar, RpAlienAvatar, RpMonsterAvatar, RpRobotAvatar, RpCatAvatar } from "./CharacterAvatars";
 
+const rpAvatars = [RpGirlAvatar, RpAlienAvatar, RpMonsterAvatar, RpRobotAvatar, RpCatAvatar];
+
+const peerAvatarIndex = (id = "") => {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffffff;
+  return h % rpAvatars.length;
+};
+
+const RpAvatarForIndex = ({ index }) => {
+  const Avatar = rpAvatars[index % rpAvatars.length];
+  return <Avatar />;
+};
+
 export const Preview = ({ setConnected }) => {
   const { roomID } = useParams();
-  const state = useContext(ReduxContext)[0];
-  const { joinRoomFunc, peerReady } = useContext(SocketContext);
+  const [state, dispatch] = useContext(ReduxContext);
+  const { joinRoomFunc, peerReady, socket } = useContext(SocketContext);
   const { localStream } = state;
   const [name, setName] = useState("");
+  const [peerCount, setPeerCount] = useState(null);
+
+  useEffect(() => {
+    if (!socket || !roomID) return;
+    socket.emit("check_room", { roomID }, ({ count }) => {
+      setPeerCount(count);
+    });
+  }, [socket, roomID]);
 
   const joinRoom = () => {
+    dispatch({ type: "SET_NAME", payload: name.trim() });
     joinRoomFunc(roomID);
     setConnected(true);
   };
@@ -84,17 +106,19 @@ export const Preview = ({ setConnected }) => {
             </button>
           </div>
 
-          <div className="room-people">
-            <div className="rp-label">5 others already in this room</div>
-            <div className="rp-avatars">
-              <RpGirlAvatar />
-              <RpAlienAvatar />
-              <RpMonsterAvatar />
-              <RpRobotAvatar />
-              <RpCatAvatar />
-              <div className="rp-more">+2</div>
+          {peerCount > 0 && (
+            <div className="room-people">
+              <div className="rp-label">
+                {peerCount} {peerCount === 1 ? "other" : "others"} already in this room
+              </div>
+              <div className="rp-avatars">
+                {Array.from({ length: Math.min(peerCount, 5) }).map((_, i) => (
+                  <RpAvatarForIndex key={i} index={peerAvatarIndex(roomID + i)} />
+                ))}
+                {peerCount > 5 && <div className="rp-more">+{peerCount - 5}</div>}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

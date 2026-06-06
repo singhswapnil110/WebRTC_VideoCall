@@ -29,6 +29,16 @@ io.on("connection", (socket) => {
     socket.leave(roomID);
   });
 
+  socket.on("check_room", ({ roomID }, callback) => {
+    const room = io.sockets.adapter.rooms.get(roomID);
+    const count = room ? room.size : 0;
+    callback({ count });
+  });
+
+  socket.on("send_message", ({ roomID, message }) => {
+    socket.to(roomID).emit("receive_message", message);
+  });
+
   socket.on("disconnecting", () => {
     for (const room of socket.rooms) {
       if (room !== socket.id) {

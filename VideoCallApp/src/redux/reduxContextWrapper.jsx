@@ -92,7 +92,7 @@ export const ReduxContextWrapper = ({ children }) => {
 
   return (
     <ReduxContext.Provider value={[state, dispatch]}>
-      <SocketContext.Provider value={{ joinRoomFunc, leaveRoomFunc, peerReady }}>
+      <SocketContext.Provider value={{ joinRoomFunc, leaveRoomFunc, peerReady, socket: socketRef.current }}>
         {children}
       </SocketContext.Provider>
     </ReduxContext.Provider>

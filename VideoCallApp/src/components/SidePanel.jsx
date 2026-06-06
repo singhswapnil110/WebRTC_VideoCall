@@ -1,24 +1,36 @@
 import React, { useState } from "react";
+import {
+  SmallBoyAvatar, SmallGirlAvatar, SmallAlienAvatar,
+  SmallMonsterAvatar, SmallRobotAvatar, SmallCatAvatar,
+  SmallPinkGirlAvatar, SmallTealAndroidAvatar, SmallCuteCreatureAvatar,
+} from "./CharacterAvatars";
+
+const smallAvatars = [
+  SmallBoyAvatar, SmallGirlAvatar, SmallAlienAvatar,
+  SmallMonsterAvatar, SmallRobotAvatar, SmallCatAvatar,
+  SmallPinkGirlAvatar, SmallTealAndroidAvatar, SmallCuteCreatureAvatar,
+];
+
+const peerAvatarIndex = (id = "") => {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffffff;
+  return h % smallAvatars.length;
+};
+
+const AvatarForId = ({ id }) => {
+  const Avatar = smallAvatars[peerAvatarIndex(id)];
+  return <Avatar />;
+};
 
 /* Reusable slide-in panel for Chat, Participants, Live Translate */
 
-export const ChatPanel = ({ open, onClose }) => {
+export const ChatPanel = ({ open, onClose, messages, onSendMessage }) => {
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState([
-    { id: 1, name: "Priya", text: "Hey! Can everyone hear me? 👋", me: false },
-    { id: 2, name: "You", text: "Loud and clear! Ready to start.", me: true },
-    { id: 3, name: "Arjun", text: "Joining from the train, might drop for a sec", me: false },
-    { id: 4, name: "You", text: "No worries, we'll record!", me: true },
-    { id: 5, name: "Riya", text: "Can someone share the doc link again?", me: false },
-  ]);
 
   const sendMessage = (e) => {
     e.preventDefault();
-    if (!message.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now(), name: "You", text: message.trim(), me: true },
-    ]);
+    if (!message.trim() || !onSendMessage) return;
+    onSendMessage(message.trim());
     setMessage("");
   };
 
@@ -35,7 +47,7 @@ export const ChatPanel = ({ open, onClose }) => {
       <div className="chat-messages">
         {messages.map((msg) => (
           <div key={msg.id} className={`chat-msg ${msg.me ? "me" : ""}`}>
-            <span className="chat-msg-name">{msg.name}</span>
+            <span className="chat-msg-name">{msg.senderName || msg.name}</span>
             <div className="chat-bubble">{msg.text}</div>
           </div>
         ))}
@@ -52,12 +64,6 @@ export const ChatPanel = ({ open, onClose }) => {
   );
 };
 
-import {
-  SmallBoyAvatar, SmallGirlAvatar, SmallAlienAvatar,
-  SmallMonsterAvatar, SmallRobotAvatar, SmallCatAvatar,
-  SmallPinkGirlAvatar, SmallTealAndroidAvatar, SmallCuteCreatureAvatar,
-} from "./CharacterAvatars";
-
 const micMutedSvg = (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="1" y1="1" x2="23" y2="23"/>
@@ -73,41 +79,32 @@ const micLiveSvg = (
   </svg>
 );
 
-const participants = [
-  { name: "You (Swapnil)", muted: true, avatar: <SmallBoyAvatar /> },
-  { name: "Priya", muted: false, avatar: <SmallGirlAvatar /> },
-  { name: "Arjun", muted: true, avatar: <SmallAlienAvatar /> },
-  { name: "Riya", muted: true, avatar: <SmallMonsterAvatar /> },
-  { name: "Nikhil", muted: false, avatar: <SmallRobotAvatar /> },
-  { name: "Kabir", muted: true, avatar: <SmallCatAvatar /> },
-  { name: "Tanvi", muted: false, avatar: <SmallPinkGirlAvatar /> },
-  { name: "Dev", muted: true, avatar: <SmallTealAndroidAvatar /> },
-  { name: "Meera", muted: true, avatar: <SmallCuteCreatureAvatar /> },
-];
-
-export const ParticipantsPanel = ({ open, onClose }) => (
-  <div className={`side-panel ${open ? "open" : ""}`}>
-    <div className="panel-head">
-      <span className="panel-title">Participants ({participants.length})</span>
-      <button className="panel-close" onClick={onClose}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </div>
-    <div className="part-list">
-      {participants.map((p, i) => (
-        <div key={i} className="part-item">
-          {p.avatar}
-          <span className="part-name">{p.name}</span>
-          <div className={`part-mic ${p.muted ? "muted" : "live"}`}>
-            {p.muted ? micMutedSvg : micLiveSvg}
+export const ParticipantsPanel = ({ open, onClose, participants, localUser }) => {
+  const all = localUser ? [localUser, ...participants] : participants;
+  return (
+    <div className={`side-panel ${open ? "open" : ""}`}>
+      <div className="panel-head">
+        <span className="panel-title">Participants ({all.length})</span>
+        <button className="panel-close" onClick={onClose}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div className="part-list">
+        {all.map((p) => (
+          <div key={p.id} className="part-item">
+            <AvatarForId id={p.id} />
+            <span className="part-name">{p.name}</span>
+            <div className={`part-mic ${p.muted ? "muted" : "live"}`}>
+              {p.muted ? micMutedSvg : micLiveSvg}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export const TranslatePanel = ({ open, onClose }) => {
   const [speaking, setSpeaking] = useState("English");

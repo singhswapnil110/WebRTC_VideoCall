@@ -39,6 +39,25 @@ export function reducerFun(state, action) {
         ...state,
         roomID: null,
         connections: {},
+        messages: [],
+      };
+
+    case "SET_NAME":
+      return {
+        ...state,
+        name: action.payload,
+      };
+
+    case "ADD_MESSAGE":
+      return {
+        ...state,
+        messages: [...state.messages, action.payload],
+      };
+
+    case "SET_MESSAGES":
+      return {
+        ...state,
+        messages: action.payload,
       };
 
     default:

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useContext, useCallback } from "react";
 import { ReduxContext, SocketContext } from "../redux/reduxContextWrapper";
 import { useNavigate } from "react-router-dom";
 
-export const Sidebar = ({ isPreview, panels, onTogglePanel }) => {
+export const Sidebar = ({ isPreview, panels, onTogglePanel, messageCount }) => {
   const [trackStatus, setTrackStatus] = useState({ video: true, audio: true });
   const [state] = useContext(ReduxContext);
   const { leaveRoomFunc } = useContext(SocketContext);
@@ -73,7 +73,7 @@ export const Sidebar = ({ isPreview, panels, onTogglePanel }) => {
               data-tip="Chat"
               onClick={() => onTogglePanel("chat")}
             >
-              <div className="sb-badge">3</div>
+              {messageCount > 0 && <div className="sb-badge">{messageCount}</div>}
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
               </svg>
