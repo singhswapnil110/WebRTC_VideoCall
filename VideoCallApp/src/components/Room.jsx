@@ -1,26 +1,7 @@
 import React, { useContext } from "react";
 import { ReduxContext } from "../redux/reduxContextWrapper";
 import { VideoTile } from "./VideoTile";
-import {
-  BoyAvatar, GirlAvatar, AlienAvatar, MonsterAvatar,
-  RobotAvatar, CatAvatar, PinkGirlAvatar, TealAndroidAvatar, CuteCreatureAvatar,
-} from "./CharacterAvatars";
-
-const peerAvatars = [
-  BoyAvatar, GirlAvatar, AlienAvatar, MonsterAvatar,
-  RobotAvatar, CatAvatar, PinkGirlAvatar, TealAndroidAvatar, CuteCreatureAvatar,
-];
-
-const peerAvatarIndex = (id = "") => {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffffff;
-  return h % peerAvatars.length;
-};
-
-const AvatarForId = ({ id }) => {
-  const Avatar = peerAvatars[peerAvatarIndex(id)];
-  return <Avatar size={48} />;
-};
+import { NiceAvatar } from "./CharacterAvatars";
 
 export const Room = ({ captionsOn }) => {
   const [state] = useContext(ReduxContext);
@@ -59,9 +40,9 @@ export const Room = ({ captionsOn }) => {
             {tile.empty ? null : tile.stream ? (
               <VideoTile stream={tile.stream} />
             ) : tile.isLocal ? (
-              <AvatarForId id="local" />
+              <NiceAvatar id="local" className="cam-avatar" size={64} />
             ) : (
-              <AvatarForId id={tile.avatarId} />
+              <NiceAvatar id={tile.avatarId} className="cam-avatar" size={64} />
             )}
             {tile.name && <span className="v-name">{tile.name}</span>}
             {tile.muted && (

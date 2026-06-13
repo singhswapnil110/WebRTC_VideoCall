@@ -13,6 +13,7 @@
     "react": "experimental",
     "react-dom": "experimental",
     "react-icons": "latest",
+    "react-nice-avatar": "^1.5.0",
     "react-router-dom": "latest",
     "socket.io-client": "^4.7.5",
     "uuid": "^9.0.1"

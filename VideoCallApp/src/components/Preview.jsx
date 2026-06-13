@@ -2,21 +2,7 @@ import React, { useContext, useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { ReduxContext, SocketContext } from "../redux/reduxContextWrapper";
 import { VideoTile } from "./VideoTile";
-import { BoyAvatar } from "./CharacterAvatars";
-import { RpGirlAvatar, RpAlienAvatar, RpMonsterAvatar, RpRobotAvatar, RpCatAvatar } from "./CharacterAvatars";
-
-const rpAvatars = [RpGirlAvatar, RpAlienAvatar, RpMonsterAvatar, RpRobotAvatar, RpCatAvatar];
-
-const peerAvatarIndex = (id = "") => {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffffff;
-  return h % rpAvatars.length;
-};
-
-const RpAvatarForIndex = ({ index }) => {
-  const Avatar = rpAvatars[index % rpAvatars.length];
-  return <Avatar />;
-};
+import { NiceAvatar } from "./CharacterAvatars";
 
 export const Preview = ({ setConnected }) => {
   const { roomID } = useParams();
@@ -63,7 +49,7 @@ export const Preview = ({ setConnected }) => {
               {localStream && camOn ? (
                 <VideoTile stream={localStream} />
               ) : (
-                <BoyAvatar size={64} />
+                <NiceAvatar id="local" className="cam-avatar" size={64} />
               )}
               <div className="cam-ctrls">
                 <button className={`cam-ctrl-btn ${micOn ? "on" : "off"}`} onClick={toggleMic}>
@@ -113,7 +99,7 @@ export const Preview = ({ setConnected }) => {
               </div>
               <div className="rp-avatars">
                 {Array.from({ length: Math.min(peerCount, 5) }).map((_, i) => (
-                  <RpAvatarForIndex key={i} index={peerAvatarIndex(roomID + i)} />
+                  <NiceAvatar key={i} id={`${roomID}-${i}`} className="rp-avatar" size={22} />
                 ))}
                 {peerCount > 5 && <div className="rp-more">+{peerCount - 5}</div>}
               </div>

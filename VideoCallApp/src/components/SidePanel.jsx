@@ -1,26 +1,5 @@
 import React, { useState } from "react";
-import {
-  SmallBoyAvatar, SmallGirlAvatar, SmallAlienAvatar,
-  SmallMonsterAvatar, SmallRobotAvatar, SmallCatAvatar,
-  SmallPinkGirlAvatar, SmallTealAndroidAvatar, SmallCuteCreatureAvatar,
-} from "./CharacterAvatars";
-
-const smallAvatars = [
-  SmallBoyAvatar, SmallGirlAvatar, SmallAlienAvatar,
-  SmallMonsterAvatar, SmallRobotAvatar, SmallCatAvatar,
-  SmallPinkGirlAvatar, SmallTealAndroidAvatar, SmallCuteCreatureAvatar,
-];
-
-const peerAvatarIndex = (id = "") => {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffffff;
-  return h % smallAvatars.length;
-};
-
-const AvatarForId = ({ id }) => {
-  const Avatar = smallAvatars[peerAvatarIndex(id)];
-  return <Avatar />;
-};
+import { NiceAvatar } from "./CharacterAvatars";
 
 /* Reusable slide-in panel for Chat, Participants, Live Translate */
 
@@ -94,7 +73,7 @@ export const ParticipantsPanel = ({ open, onClose, participants, localUser }) =>
       <div className="part-list">
         {all.map((p) => (
           <div key={p.id} className="part-item">
-            <AvatarForId id={p.id} />
+            <NiceAvatar id={p.id} className="part-avatar" size={18} />
             <span className="part-name">{p.name}</span>
             <div className={`part-mic ${p.muted ? "muted" : "live"}`}>
               {p.muted ? micMutedSvg : micLiveSvg}
