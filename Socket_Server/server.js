@@ -25,8 +25,10 @@ io.on("connection", (socket) => {
   });
 
   socket.on("user_disconnect", ({ userID, roomID }) => {
-    socket.to(roomID).emit("user_disconnected", { userID });
-    socket.leave(roomID);
+    if (roomID) {
+      socket.to(roomID).emit("user_disconnected", { userID });
+      socket.leave(roomID);
+    }
   });
 
   socket.on("check_room", ({ roomID }, callback) => {
@@ -36,7 +38,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("send_message", ({ roomID, message }) => {
-    socket.to(roomID).emit("receive_message", message);
+    io.to(roomID).emit("receive_message", message);
   });
 
   socket.on("disconnecting", () => {

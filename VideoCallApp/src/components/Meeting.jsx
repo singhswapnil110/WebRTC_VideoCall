@@ -54,11 +54,12 @@ export const Meeting = () => {
 
   useEffect(() => {
     if (!socket) return;
+    const currentSocket = socket;
     const handler = (msg) => {
       dispatch({ type: "ADD_MESSAGE", payload: msg });
     };
-    socket.on("receive_message", handler);
-    return () => socket.off("receive_message", handler);
+    currentSocket.on("receive_message", handler);
+    return () => currentSocket.off("receive_message", handler);
   }, [socket, dispatch]);
 
   const handleSendMessage = useCallback(
@@ -72,10 +73,9 @@ export const Meeting = () => {
         timestamp: Date.now(),
         me: true,
       };
-      dispatch({ type: "ADD_MESSAGE", payload: msg });
       socket.emit("send_message", { roomID: state.roomID, message: msg });
     },
-    [socket, state.roomID, name, dispatch]
+    [socket, state.roomID, name]
   );
 
   const participantList = Object.values(connections).map((conn) => ({

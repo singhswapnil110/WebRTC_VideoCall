@@ -18,15 +18,18 @@ export const ReduxContextWrapper = ({ children }) => {
   const socketRef = useRef(null);
   const peerRef = useRef(null);
   const localStreamRef = useRef(null);
+  const roomIDRef = useRef(null);
   const [state, dispatch] = useReducer(reducerFun, initialState);
   const [peerReady, setPeerReady] = useState(false);
-  const { localStream } = state;
+  const { localStream, roomID } = state;
 
-  // Keep localStreamRef in sync so event handlers always have the latest stream
-  // without needing to re-create the socket/peer connection on every stream change
   useEffect(() => {
     localStreamRef.current = localStream;
   }, [localStream]);
+
+  useEffect(() => {
+    roomIDRef.current = roomID;
+  }, [roomID]);
 
   // Initialize socket and peer once on mount
   useEffect(() => {
@@ -42,8 +45,8 @@ export const ReduxContextWrapper = ({ children }) => {
     socketRef.current.on("user_joined", ({ userID }) => {
       if (!localStreamRef.current) return;
       const call = peerRef.current.call(userID, localStreamRef.current);
-      call.on("stream", () =>
-        dispatch({ type: "ADD_CONNECTION", payload: call })
+      call.on("stream", (stream) =>
+        dispatch({ type: "ADD_CONNECTION", payload: { peer: call.peer, stream } })
       );
       call.on("close", () =>
         dispatch({ type: "REMOVE_CONNECTION", payload: call.peer })
@@ -53,8 +56,8 @@ export const ReduxContextWrapper = ({ children }) => {
     peerRef.current.on("call", (call) => {
       if (!localStreamRef.current) return;
       call.answer(localStreamRef.current);
-      call.on("stream", () =>
-        dispatch({ type: "ADD_CONNECTION", payload: call })
+      call.on("stream", (stream) =>
+        dispatch({ type: "ADD_CONNECTION", payload: { peer: call.peer, stream } })
       );
       call.on("close", () =>
         dispatch({ type: "REMOVE_CONNECTION", payload: call.peer })
@@ -83,10 +86,13 @@ export const ReduxContextWrapper = ({ children }) => {
   };
 
   const leaveRoomFunc = () => {
-    socketRef.current.emit("user_disconnect", {
-      userID: peerRef.current.id,
-      roomID: state.roomID,
-    });
+    const currentRoomID = roomIDRef.current;
+    if (currentRoomID) {
+      socketRef.current.emit("user_disconnect", {
+        userID: peerRef.current.id,
+        roomID: currentRoomID,
+      });
+    }
     dispatch({ type: "LEAVE_ROOM" });
   };
 
