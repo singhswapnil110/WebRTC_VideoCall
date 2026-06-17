@@ -19,8 +19,10 @@ export const ReduxContextWrapper = ({ children }) => {
   const peerRef = useRef(null);
   const localStreamRef = useRef(null);
   const roomIDRef = useRef(null);
+  const callsRef = useRef({});
   const [state, dispatch] = useReducer(reducerFun, initialState);
   const [peerReady, setPeerReady] = useState(false);
+  const [socket, setSocket] = useState(null);
   const { localStream, roomID } = state;
 
   useEffect(() => {
@@ -31,20 +33,35 @@ export const ReduxContextWrapper = ({ children }) => {
     roomIDRef.current = roomID;
   }, [roomID]);
 
+  // Close PeerJS calls and stop remote streams for removed peers
+  useEffect(() => {
+    const currentPeers = new Set(Object.keys(state.connections));
+    Object.entries(callsRef.current).forEach(([peerID, call]) => {
+      if (!currentPeers.has(peerID)) {
+        call.close();
+        delete callsRef.current[peerID];
+      }
+    });
+  }, [state.connections]);
+
   // Initialize socket and peer once on mount
   useEffect(() => {
     peerRef.current = new Peer();
-    socketRef.current = io(
+    const socketInstance = io(
       import.meta.env.VITE_SOCKET_URL || "http://localhost:8002"
     );
+    socketRef.current = socketInstance;
+    setSocket(socketInstance);
 
     peerRef.current.on("open", () => {
       setPeerReady(true);
     });
 
     socketRef.current.on("user_joined", ({ userID }) => {
-      if (!localStreamRef.current) return;
+      if (!localStreamRef.current || !peerRef.current) return;
       const call = peerRef.current.call(userID, localStreamRef.current);
+      if (!call) return;
+      callsRef.current[call.peer] = call;
       call.on("stream", (stream) =>
         dispatch({ type: "ADD_CONNECTION", payload: { peer: call.peer, stream } })
       );
@@ -56,6 +73,7 @@ export const ReduxContextWrapper = ({ children }) => {
     peerRef.current.on("call", (call) => {
       if (!localStreamRef.current) return;
       call.answer(localStreamRef.current);
+      callsRef.current[call.peer] = call;
       call.on("stream", (stream) =>
         dispatch({ type: "ADD_CONNECTION", payload: { peer: call.peer, stream } })
       );
@@ -65,6 +83,8 @@ export const ReduxContextWrapper = ({ children }) => {
     });
 
     socketRef.current.on("user_disconnected", ({ userID }) => {
+      callsRef.current[userID]?.close();
+      delete callsRef.current[userID];
       dispatch({ type: "REMOVE_CONNECTION", payload: userID });
     });
 
@@ -74,10 +94,14 @@ export const ReduxContextWrapper = ({ children }) => {
       peerRef.current?.off("call");
       socketRef.current?.disconnect();
       peerRef.current?.destroy();
+      Object.values(callsRef.current).forEach((call) => call.close());
+      callsRef.current = {};
+      setSocket(null);
     };
   }, []);
 
   const joinRoomFunc = (roomID) => {
+    if (!socketRef.current || !peerRef.current?.id) return;
     socketRef.current.emit("join_room", {
       roomID,
       userID: peerRef.current.id,
@@ -87,18 +111,21 @@ export const ReduxContextWrapper = ({ children }) => {
 
   const leaveRoomFunc = () => {
     const currentRoomID = roomIDRef.current;
+    if (!socketRef.current || !peerRef.current?.id) return;
     if (currentRoomID) {
       socketRef.current.emit("user_disconnect", {
         userID: peerRef.current.id,
         roomID: currentRoomID,
       });
     }
+    Object.values(callsRef.current).forEach((call) => call.close());
+    callsRef.current = {};
     dispatch({ type: "LEAVE_ROOM" });
   };
 
   return (
     <ReduxContext.Provider value={[state, dispatch]}>
-      <SocketContext.Provider value={{ joinRoomFunc, leaveRoomFunc, peerReady, socket: socketRef.current }}>
+      <SocketContext.Provider value={{ joinRoomFunc, leaveRoomFunc, peerReady, socket }}>
         {children}
       </SocketContext.Provider>
     </ReduxContext.Provider>

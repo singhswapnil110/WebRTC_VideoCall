@@ -4,8 +4,18 @@ export const VideoTile = ({ stream }) => {
   const videoRef = useRef();
 
   useEffect(() => {
-    if (!stream) return;
-    videoRef.current.srcObject = stream;
+    const el = videoRef.current;
+    if (!el) return;
+    if (!stream) {
+      el.pause();
+      el.srcObject = null;
+      return;
+    }
+    el.srcObject = stream;
+    return () => {
+      el.pause();
+      el.srcObject = null;
+    };
   }, [stream]);
 
   return (

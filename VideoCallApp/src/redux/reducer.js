@@ -33,17 +33,13 @@ export function reducerFun(state, action) {
       };
     }
 
-    case "LEAVE_ROOM": {
-      Object.values(state.connections).forEach((conn) => {
-        conn.remoteStream?.getTracks?.().forEach((t) => t.stop());
-      });
+    case "LEAVE_ROOM":
       return {
         ...state,
         roomID: null,
         connections: {},
         messages: [],
       };
-    }
 
     case "SET_NAME":
       return {

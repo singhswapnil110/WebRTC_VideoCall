@@ -3,7 +3,10 @@ import { ReduxContext, SocketContext } from "../redux/reduxContextWrapper";
 import { Preview } from "./Preview";
 import { Room } from "./Room";
 import { Sidebar } from "./Sidebar";
-import { ChatPanel, ParticipantsPanel, TranslatePanel } from "./SidePanel";
+import { SidePanel } from "./SidePanel";
+import { ChatPanel } from "./ChatPanel";
+import { ParticipantsPanel } from "./ParticipantsPanel";
+import { TranslatePanel } from "./TranslatePanel";
 
 export const Meeting = () => {
   const [isConnected, setConnected] = useState(false);
@@ -56,7 +59,8 @@ export const Meeting = () => {
     if (!socket) return;
     const currentSocket = socket;
     const handler = (msg) => {
-      dispatch({ type: "ADD_MESSAGE", payload: msg });
+      const isMe = msg.senderId === currentSocket.id;
+      dispatch({ type: "ADD_MESSAGE", payload: { ...msg, me: isMe } });
     };
     currentSocket.on("receive_message", handler);
     return () => currentSocket.off("receive_message", handler);
@@ -66,12 +70,11 @@ export const Meeting = () => {
     (text) => {
       if (!socket || !state.roomID) return;
       const msg = {
-        id: Date.now().toString(),
+        id: `${socket.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         senderId: socket.id,
         senderName: name || "You",
         text,
         timestamp: Date.now(),
-        me: true,
       };
       socket.emit("send_message", { roomID: state.roomID, message: msg });
     },
@@ -99,19 +102,23 @@ export const Meeting = () => {
           <div className="app-main">
             <Room captionsOn={captionsOn} />
           </div>
-          <ChatPanel
-            open={panels.chat}
-            onClose={() => setActivePanel(null)}
-            messages={messages}
-            onSendMessage={handleSendMessage}
-          />
-          <ParticipantsPanel
-            open={panels.participants}
-            onClose={() => setActivePanel(null)}
-            participants={participantList}
-            localUser={localUser}
-          />
-          <TranslatePanel open={panels.translate} onClose={() => setActivePanel(null)} />
+          <SidePanel open={panels.chat}>
+            <ChatPanel
+              onClose={() => setActivePanel(null)}
+              messages={messages}
+              onSendMessage={handleSendMessage}
+            />
+          </SidePanel>
+          <SidePanel open={panels.participants}>
+            <ParticipantsPanel
+              onClose={() => setActivePanel(null)}
+              participants={participantList}
+              localUser={localUser}
+            />
+          </SidePanel>
+          <SidePanel open={panels.translate}>
+            <TranslatePanel onClose={() => setActivePanel(null)} />
+          </SidePanel>
         </>
       ) : (
         <Preview setConnected={setConnected} />
