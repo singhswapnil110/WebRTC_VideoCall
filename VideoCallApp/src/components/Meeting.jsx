@@ -16,6 +16,7 @@ export const Meeting = () => {
 
   const [activePanel, setActivePanel] = useState(null);
   const [captionsOn, setCaptionsOn] = useState(false);
+  const [readCount, setReadCount] = useState(0);
 
   const { localStream, connections, messages, name } = state;
 
@@ -31,8 +32,9 @@ export const Meeting = () => {
       setCaptionsOn((prev) => !prev);
       return;
     }
+    if (key === "chat") setReadCount(messages.length);
     setActivePanel((prev) => (prev === key ? null : key));
-  }, []);
+  }, [messages.length]);
 
   useEffect(() => {
     let mounted = true;
@@ -123,7 +125,7 @@ export const Meeting = () => {
       ) : (
         <Preview setConnected={setConnected} />
       )}
-      <Sidebar isPreview={!isConnected} panels={panels} onTogglePanel={onTogglePanel} messageCount={messages.length} />
+      <Sidebar isPreview={!isConnected} panels={panels} onTogglePanel={onTogglePanel} messageCount={messages.length - readCount} />
     </div>
   );
 };

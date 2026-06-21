@@ -53,12 +53,6 @@ export function reducerFun(state, action) {
         messages: [...state.messages, action.payload],
       };
 
-    case "SET_MESSAGES":
-      return {
-        ...state,
-        messages: action.payload,
-      };
-
     default:
       return state;
   }

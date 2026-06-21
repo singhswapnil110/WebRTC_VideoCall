@@ -131,7 +131,7 @@ const Dropdown = ({ open, label, items }) => {
     <div className="sb-dropdown open">
       <div className="sb-dd-label">{label}</div>
       {items.map((item) => (
-        <div key={item} className={`sb-dd-item ${item.active ? "active" : ""}`}>
+        <div key={item.label} className={`sb-dd-item ${item.active ? "active" : ""}`}>
           {item.active ? (
             <div className="sb-dd-check">
               <Icon name="check" width={8} height={8} strokeWidth={3} />
