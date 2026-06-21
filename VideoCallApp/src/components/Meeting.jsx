@@ -16,7 +16,11 @@ export const Meeting = () => {
 
   const [activePanel, setActivePanel] = useState(null);
   const [captionsOn, setCaptionsOn] = useState(false);
-  const [readCount, setReadCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const activePanelRef = useRef(activePanel);
+  useEffect(() => {
+    activePanelRef.current = activePanel;
+  }, [activePanel]);
 
   const { localStream, connections, messages, name } = state;
 
@@ -32,9 +36,9 @@ export const Meeting = () => {
       setCaptionsOn((prev) => !prev);
       return;
     }
-    if (key === "chat") setReadCount(messages.length);
+    if (key === "chat") setUnreadCount(0);
     setActivePanel((prev) => (prev === key ? null : key));
-  }, [messages.length]);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -63,6 +67,7 @@ export const Meeting = () => {
     const handler = (msg) => {
       const isMe = msg.senderId === currentSocket.id;
       dispatch({ type: "ADD_MESSAGE", payload: { ...msg, me: isMe } });
+      if (!isMe && activePanelRef.current !== "chat") setUnreadCount((c) => c + 1);
     };
     currentSocket.on("receive_message", handler);
     return () => currentSocket.off("receive_message", handler);
@@ -125,7 +130,7 @@ export const Meeting = () => {
       ) : (
         <Preview setConnected={setConnected} />
       )}
-      <Sidebar isPreview={!isConnected} panels={panels} onTogglePanel={onTogglePanel} messageCount={messages.length - readCount} />
+      <Sidebar isPreview={!isConnected} panels={panels} onTogglePanel={onTogglePanel} messageCount={unreadCount} />
     </div>
   );
 };
