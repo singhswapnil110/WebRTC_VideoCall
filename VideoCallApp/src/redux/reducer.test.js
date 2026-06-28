@@ -62,6 +62,20 @@ describe("reducer", () => {
     expect(state.connections["peer-abc"]).toBeUndefined();
   });
 
+  it("sets room and name", () => {
+    const withRoom = reducerFun(initialState, {
+      type: "SET_ROOM",
+      payload: "room-123",
+    });
+    expect(withRoom.roomID).toBe("room-123");
+
+    const withName = reducerFun(withRoom, {
+      type: "SET_NAME",
+      payload: "Swapnil",
+    });
+    expect(withName.name).toBe("Swapnil");
+  });
+
   it("adds messages and keeps sender identity", () => {
     const state1 = reducerFun(initialState, {
       type: "ADD_MESSAGE",

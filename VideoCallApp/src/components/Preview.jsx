@@ -35,7 +35,7 @@ export const Preview = ({ setConnected }) => {
           <div className="cam-frame">
             <div className="cam-screen">
               {localStream && trackStatus.video ? (
-                <VideoTile stream={localStream} />
+                <VideoTile stream={localStream} isLocal />
               ) : (
                 <NiceAvatar id="local" className="cam-avatar" size={64} />
               )}

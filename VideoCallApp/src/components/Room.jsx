@@ -4,6 +4,15 @@ import { VideoTile } from "./VideoTile";
 import { NiceAvatar } from "./CharacterAvatars";
 import { Icon } from "./Icon";
 
+const gridLayout = (length) => {
+  for (let i = 1; i < 6; i += 1) {
+    for (let j = i; j <= i + 1; j += 1) {
+      if (i * j >= length) return { rows: i, columns: j };
+    }
+  }
+  return { rows: 5, columns: 6 };
+};
+
 export const Room = ({ captionsOn }) => {
   const [state] = useContext(ReduxContext);
   const { connections, localStream, name } = state;
@@ -31,21 +40,30 @@ export const Room = ({ captionsOn }) => {
         speaking: false,
         avatarId: conn.peer,
         muted: peerMuted,
+        isLocal: false,
       });
     });
     return list;
   }, [peers, localStream, name, localMuted]);
 
+  const { rows, columns } = useMemo(() => gridLayout(tiles.length), [tiles.length]);
+
   return (
     <div className="meeting-main">
-      <div className="video-grid">
+      <div
+        className="video-grid"
+        style={{
+          gridTemplateColumns: `repeat(${columns}, 1fr)`,
+          gridTemplateRows: `repeat(${rows}, 1fr)`,
+        }}
+      >
         {tiles.map((tile) => (
           <div
             key={tile.key}
             className={`v-tile ${tile.speaking ? "speaking" : ""}`}
           >
             {tile.stream ? (
-              <VideoTile stream={tile.stream} />
+              <VideoTile stream={tile.stream} isLocal={tile.isLocal} />
             ) : tile.isLocal ? (
               <NiceAvatar id="local" className="cam-avatar" size={64} />
             ) : (

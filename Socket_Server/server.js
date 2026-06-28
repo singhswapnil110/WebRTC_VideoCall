@@ -33,13 +33,14 @@ io.on("connection", (socket) => {
     socket.to(roomID).emit("user_joined", { userID });
   });
 
-  socket.on("user_disconnect", ({ userID, roomID }) => {
+  socket.on("user_disconnect", ({ roomID }) => {
     if (!isValidRoomID(roomID)) return;
-    socket.to(roomID).emit("user_disconnected", { userID });
+    socket.to(roomID).emit("user_disconnected", { userID: socket.data.userID });
     socket.leave(roomID);
   });
 
   socket.on("check_room", ({ roomID }, callback) => {
+    if (typeof callback !== "function") return;
     if (!isValidRoomID(roomID)) {
       callback({ count: 0 });
       return;

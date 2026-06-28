@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 
-export const VideoTile = ({ stream }) => {
+export const VideoTile = ({ stream, isLocal = false }) => {
   const videoRef = useRef();
 
   useEffect(() => {
@@ -23,7 +23,7 @@ export const VideoTile = ({ stream }) => {
       ref={videoRef}
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
       autoPlay
-      muted
+      muted={isLocal}
       playsInline
     />
   );

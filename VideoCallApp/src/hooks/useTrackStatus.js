@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 
 export function useTrackStatus(localStream) {
-  const [status, setStatus] = useState({ video: true, audio: true });
+  const [status, setStatus] = useState({ video: false, audio: false });
 
   useEffect(() => {
-    if (!localStream) return;
+    if (!localStream) {
+      setStatus({ video: false, audio: false });
+      return;
+    }
     const update = () => {
-      const next = { video: true, audio: true };
+      const next = { video: false, audio: false };
       localStream.getTracks().forEach((track) => {
         next[track.kind] = track.enabled;
       });
