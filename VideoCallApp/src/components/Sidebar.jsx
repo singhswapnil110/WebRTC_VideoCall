@@ -1,17 +1,25 @@
 import React, { useState, useContext, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ReduxContext, SocketContext } from "../redux/reduxContextWrapper";
-import { useTrackStatus } from "../hooks/useTrackStatus";
 import { Icon } from "./Icon";
 
-export const Sidebar = ({ isPreview, panels, onTogglePanel, messageCount }) => {
+export const Sidebar = ({
+  isPreview,
+  panels,
+  onTogglePanel,
+  messageCount,
+  trackStatus,
+  toggleTrack,
+  captionsSupported = true,
+  captionStatus = "idle",
+  captionError,
+}) => {
   const [state] = useContext(ReduxContext);
   const { leaveRoomFunc } = useContext(SocketContext);
   const { localStream } = state;
   const { roomID } = useParams();
   const navigate = useNavigate();
 
-  const { status: trackStatus, toggleTrack } = useTrackStatus(localStream);
   const [openDropdown, setOpenDropdown] = useState(null);
   const sidebarRef = useRef(null);
 
@@ -41,13 +49,30 @@ export const Sidebar = ({ isPreview, panels, onTogglePanel, messageCount }) => {
   };
 
   const slotBg = isPreview ? "prev-slot" : "meet-slot";
+  const captionsTip = !captionsSupported
+    ? "Live captions unavailable in this browser"
+    : captionStatus === "loading"
+      ? "Loading caption model"
+      : panels.captions
+        ? "Turn captions off"
+        : captionError?.code === "not-allowed"
+          ? "Microphone speech access blocked"
+          : "Turn captions on";
 
   const meetingButtons = [
     { key: "share", tip: "Share screen", icon: "share", active: false, onClick: () => {} },
     { key: "chat", tip: "Chat", icon: "chat", active: panels.chat, onClick: () => onTogglePanel("chat"), badge: messageCount },
     { key: "participants", tip: "Participants", icon: "participants", active: panels.participants, onClick: () => onTogglePanel("participants") },
     { key: "hand", tip: "Raise hand", icon: "hand", active: false, onClick: () => {} },
-    { key: "captions", tip: "Live captions", icon: "captions", active: panels.captions, onClick: () => onTogglePanel("captions") },
+    {
+      key: "captions",
+      tip: captionsTip,
+      icon: "captions",
+      active: panels.captions,
+      onClick: () => onTogglePanel("captions"),
+      disabled: !captionsSupported,
+      subdued: !captionsSupported,
+    },
     { key: "translate", tip: "Live translate", icon: "translate", active: panels.translate, onClick: () => onTogglePanel("translate") },
   ];
 
@@ -65,10 +90,11 @@ export const Sidebar = ({ isPreview, panels, onTogglePanel, messageCount }) => {
             {meetingButtons.map((btn) => (
               <button
                 key={btn.key}
-                className={`sb-btn ${btn.active ? "is-active" : ""}`}
+                className={`sb-btn ${btn.active ? "is-active" : ""} ${btn.subdued ? "is-subdued" : ""}`}
                 data-tip={btn.tip}
                 onClick={btn.onClick}
                 aria-label={btn.tip}
+                disabled={btn.disabled}
               >
                 {btn.badge > 0 && <div className="sb-badge">{btn.badge}</div>}
                 <Icon name={btn.icon} />
@@ -162,4 +188,3 @@ const dropdownItems = {
     { label: "External Monitor", active: false },
   ],
 };
-
