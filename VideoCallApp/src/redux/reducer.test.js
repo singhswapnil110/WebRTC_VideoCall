@@ -7,6 +7,7 @@ const initialState = {
   roomID: null,
   name: "",
   messages: [],
+  raisedHands: {},
 };
 
 const mockStream = () => {
@@ -32,9 +33,9 @@ describe("reducer", () => {
     const stream = mockStream();
     const state1 = reducerFun(initialState, {
       type: "ADD_CONNECTION",
-      payload: { peer: "peer-abc", stream },
+      payload: { peer: "peer-abc", stream, name: "Alice" },
     });
-    expect(state1.connections["peer-abc"]).toEqual({ peer: "peer-abc", remoteStream: stream });
+    expect(state1.connections["peer-abc"]).toEqual({ peer: "peer-abc", remoteStream: stream, name: "Alice" });
 
     const state2 = reducerFun(state1, {
       type: "REMOVE_CONNECTION",
@@ -44,20 +45,57 @@ describe("reducer", () => {
     expect(state1.connections).toHaveProperty("peer-abc");
   });
 
+  it("sets and clears raised hands", () => {
+    const withHand = reducerFun(initialState, {
+      type: "SET_RAISED_HAND",
+      payload: {
+        userID: "peer-abc",
+        hand: { userID: "peer-abc", userName: "Alice", raised: true, timestamp: 123 },
+      },
+    });
+
+    expect(withHand.raisedHands["peer-abc"]).toEqual({
+      userID: "peer-abc",
+      userName: "Alice",
+      raised: true,
+      timestamp: 123,
+    });
+
+    const withRoomState = reducerFun(withHand, {
+      type: "SET_RAISED_HANDS",
+      payload: {
+        "peer-def": { userID: "peer-def", userName: "Bob", raised: true, timestamp: 456 },
+      },
+    });
+    expect(withRoomState.raisedHands).toEqual({
+      "peer-def": { userID: "peer-def", userName: "Bob", raised: true, timestamp: 456 },
+    });
+
+    const cleared = reducerFun(withRoomState, {
+      type: "CLEAR_RAISED_HAND",
+      payload: "peer-def",
+    });
+    expect(cleared.raisedHands).toEqual({});
+  });
+
   it("leaves room and clears state without side effects", () => {
     const stream = mockStream();
     const state = reducerFun(
       {
         ...initialState,
         roomID: "room-123",
-        connections: { "peer-abc": { peer: "peer-abc", remoteStream: stream } },
+        connections: { "peer-abc": { peer: "peer-abc", remoteStream: stream, name: "Alice" } },
         messages: [{ id: "1", text: "hi" }],
+        raisedHands: {
+          "peer-abc": { userID: "peer-abc", userName: "Alice", raised: true, timestamp: 1 },
+        },
       },
       { type: "LEAVE_ROOM" }
     );
     expect(state.roomID).toBeNull();
     expect(state.connections).toEqual({});
     expect(state.messages).toEqual([]);
+    expect(state.raisedHands).toEqual({});
     // Side effects should be handled by the wrapper, not the reducer
     expect(state.connections["peer-abc"]).toBeUndefined();
   });
