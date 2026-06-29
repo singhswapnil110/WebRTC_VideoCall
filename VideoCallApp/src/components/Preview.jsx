@@ -23,8 +23,9 @@ export const Preview = ({ setConnected }) => {
   }, [socket, roomID]);
 
   const joinRoom = () => {
-    dispatch({ type: "SET_NAME", payload: name.trim() });
-    joinRoomFunc(roomID);
+    const trimmedName = name.trim();
+    dispatch({ type: "SET_NAME", payload: trimmedName });
+    joinRoomFunc(roomID, trimmedName);
     setConnected(true);
   };
 

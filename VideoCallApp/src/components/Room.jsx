@@ -23,9 +23,15 @@ const CaptionLine = ({ caption }) => {
   );
 };
 
-export const Room = ({ captionsOn, captionStatus = "idle", currentCaption, previousCaption }) => {
+export const Room = ({
+  captionsOn,
+  captionStatus = "idle",
+  currentCaption,
+  previousCaption,
+  outputSinkId = "",
+}) => {
   const [state] = useContext(ReduxContext);
-  const { connections, localStream, name } = state;
+  const { connections, localStream, name, raisedHands } = state;
 
   const localMuted = !localStream?.getAudioTracks?.()[0]?.enabled;
   const peers = useMemo(() => Object.values(connections), [connections]);
@@ -46,22 +52,29 @@ export const Room = ({ captionsOn, captionStatus = "idle", currentCaption, previ
       speaking: false,
       muted: localMuted,
       isLocal: true,
+      handRaised: Boolean(
+        raisedHands.local?.raised ||
+        Object.values(raisedHands).find((hand) => hand.userName === (name || "You"))?.raised
+      ),
+      isScreenSharing: Boolean(localStream?.getVideoTracks?.()[0]?.getSettings?.().displaySurface),
     });
     peers.forEach((conn) => {
       const shortId = conn.peer?.slice(-4)?.toUpperCase() ?? "??";
       const peerMuted = !conn.remoteStream?.getAudioTracks?.()[0]?.enabled;
       list.push({
         key: conn.peer || shortId,
-        name: shortId,
+        name: conn.name || shortId,
         stream: conn.remoteStream,
         speaking: false,
         avatarId: conn.peer,
         muted: peerMuted,
         isLocal: false,
+        handRaised: Boolean(raisedHands[conn.peer]?.raised),
+        isScreenSharing: false,
       });
     });
     return list;
-  }, [peers, localStream, name, localMuted]);
+  }, [peers, localStream, name, localMuted, raisedHands]);
 
   const { rows, columns } = useMemo(() => gridLayout(tiles.length), [tiles.length]);
 
@@ -80,13 +93,23 @@ export const Room = ({ captionsOn, captionStatus = "idle", currentCaption, previ
             className={`v-tile ${tile.speaking ? "speaking" : ""}`}
           >
             {tile.stream ? (
-              <VideoTile stream={tile.stream} isLocal={tile.isLocal} />
+              <VideoTile stream={tile.stream} isLocal={tile.isLocal} sinkId={tile.isLocal ? "" : outputSinkId} />
             ) : tile.isLocal ? (
               <NiceAvatar id="local" className="cam-avatar" size={64} />
             ) : (
               <NiceAvatar id={tile.avatarId} className="cam-avatar" size={64} />
             )}
             {tile.name && <span className="v-name">{tile.name}</span>}
+            {tile.isScreenSharing && (
+              <div className="v-share">
+                <Icon name="share" width={10} height={10} strokeWidth={2.5} />
+              </div>
+            )}
+            {tile.handRaised && (
+              <div className="v-hand">
+                <Icon name="hand" width={10} height={10} strokeWidth={2.2} />
+              </div>
+            )}
             {tile.muted && (
               <div className="v-muted">
                 <Icon name="micOff" width={10} height={10} strokeWidth={2.5} />

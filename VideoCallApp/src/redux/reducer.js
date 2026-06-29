@@ -13,12 +13,18 @@ export function reducerFun(state, action) {
       };
 
     case "ADD_CONNECTION": {
-      const { peer, stream } = action.payload;
+      const { peer, stream, name } = action.payload;
+      const existingConnection = state.connections[peer] || {};
       return {
         ...state,
         connections: {
           ...state.connections,
-          [peer]: { peer, remoteStream: stream },
+          [peer]: {
+            ...existingConnection,
+            peer,
+            remoteStream: stream,
+            name: name ?? existingConnection.name ?? null,
+          },
         },
       };
     }
@@ -33,12 +39,40 @@ export function reducerFun(state, action) {
       };
     }
 
+    case "SET_RAISED_HANDS":
+      return {
+        ...state,
+        raisedHands: action.payload,
+      };
+
+    case "SET_RAISED_HAND": {
+      const { userID, hand } = action.payload;
+      return {
+        ...state,
+        raisedHands: {
+          ...state.raisedHands,
+          [userID]: hand,
+        },
+      };
+    }
+
+    case "CLEAR_RAISED_HAND": {
+      const userID = action.payload;
+      const raisedHands = { ...state.raisedHands };
+      delete raisedHands[userID];
+      return {
+        ...state,
+        raisedHands,
+      };
+    }
+
     case "LEAVE_ROOM":
       return {
         ...state,
         roomID: null,
         connections: {},
         messages: [],
+        raisedHands: {},
       };
 
     case "SET_NAME":
