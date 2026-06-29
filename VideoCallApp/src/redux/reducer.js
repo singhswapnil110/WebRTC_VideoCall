@@ -13,19 +13,18 @@ export function reducerFun(state, action) {
       };
 
     case "ADD_CONNECTION": {
-      const call = action.payload;
+      const { peer, stream } = action.payload;
       return {
         ...state,
         connections: {
           ...state.connections,
-          [call.peer]: call,
+          [peer]: { peer, remoteStream: stream },
         },
       };
     }
 
     case "REMOVE_CONNECTION": {
       const peerID = action.payload;
-      state.connections[peerID]?.close();
       const updatedConn = { ...state.connections };
       delete updatedConn[peerID];
       return {
@@ -39,6 +38,19 @@ export function reducerFun(state, action) {
         ...state,
         roomID: null,
         connections: {},
+        messages: [],
+      };
+
+    case "SET_NAME":
+      return {
+        ...state,
+        name: action.payload,
+      };
+
+    case "ADD_MESSAGE":
+      return {
+        ...state,
+        messages: [...state.messages, action.payload],
       };
 
     default:

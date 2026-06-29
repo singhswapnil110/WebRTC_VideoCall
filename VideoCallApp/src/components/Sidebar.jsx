@@ -1,110 +1,165 @@
-import React, { useEffect, useState, useContext } from "react";
-import { HiMicrophone } from "react-icons/hi";
-import { TbScreenShare } from "react-icons/tb";
-import {
-  IoExitOutline,
-  IoCopyOutline,
-  IoVideocam,
-  IoChatboxOutline,
-} from "react-icons/io5";
+import React, { useState, useContext, useEffect, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { ReduxContext, SocketContext } from "../redux/reduxContextWrapper";
-import { useNavigate } from "react-router-dom";
+import { useTrackStatus } from "../hooks/useTrackStatus";
+import { Icon } from "./Icon";
 
-export const Sidebar = ({ isPreview }) => {
-  const [trackStatus, setTrackStatus] = useState({ video: true, audio: true });
+export const Sidebar = ({ isPreview, panels, onTogglePanel, messageCount }) => {
   const [state] = useContext(ReduxContext);
   const { leaveRoomFunc } = useContext(SocketContext);
-  const { localStream, roomID } = state;
+  const { localStream } = state;
+  const { roomID } = useParams();
   const navigate = useNavigate();
 
+  const { status: trackStatus, toggleTrack } = useTrackStatus(localStream);
+  const [openDropdown, setOpenDropdown] = useState(null);
+  const sidebarRef = useRef(null);
+
   useEffect(() => {
-    if (!localStream) return;
-    const status = {};
-    localStream.getTracks().forEach((track) => {
-      status[track.kind] = track.enabled;
-    });
-    setTrackStatus(status);
-  }, [localStream]);
+    const handler = (e) => {
+      if (!sidebarRef.current || !sidebarRef.current.contains(e.target)) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
 
   const leaveRoom = () => {
     leaveRoomFunc();
     navigate("/");
   };
 
-  const toggleTrack = (kind) => {
-    localStream.getTracks().forEach((track) => {
-      if (track.kind === kind) track.enabled = !track.enabled;
-    });
-    setTrackStatus((prev) => ({ ...prev, [kind]: !prev[kind] }));
+  const copyRoomLink = () => {
+    if (!roomID) return;
+    const roomLink = `${window.location.origin}/room/${roomID}`;
+    navigator.clipboard.writeText(roomLink).catch(() => {});
   };
 
-  const copyRoomLink = () => {
-    const roomLink = `${window.location.origin}/room/${roomID}`;
-    navigator.clipboard.writeText(roomLink).catch((err) => {
-      console.error("Failed to copy room link:", err);
-    });
+  const toggleDropdown = (id) => {
+    setOpenDropdown((prev) => (prev === id ? null : id));
   };
+
+  const slotBg = isPreview ? "prev-slot" : "meet-slot";
+
+  const meetingButtons = [
+    { key: "share", tip: "Share screen", icon: "share", active: false, onClick: () => {} },
+    { key: "chat", tip: "Chat", icon: "chat", active: panels.chat, onClick: () => onTogglePanel("chat"), badge: messageCount },
+    { key: "participants", tip: "Participants", icon: "participants", active: panels.participants, onClick: () => onTogglePanel("participants") },
+    { key: "hand", tip: "Raise hand", icon: "hand", active: false, onClick: () => {} },
+    { key: "captions", tip: "Live captions", icon: "captions", active: panels.captions, onClick: () => onTogglePanel("captions") },
+    { key: "translate", tip: "Live translate", icon: "translate", active: panels.translate, onClick: () => onTogglePanel("translate") },
+  ];
+
+  const deviceControls = [
+    { key: "mic", kind: "audio", icon: trackStatus.audio ? "mic" : "micOff", active: trackStatus.audio, tip: trackStatus.audio ? "Mute mic" : "Unmute mic" },
+    { key: "cam", kind: "video", icon: trackStatus.video ? "cam" : "camOff", active: trackStatus.video, tip: trackStatus.video ? "Camera on" : "Camera off" },
+    { key: "spk", kind: null, icon: "volume", active: true, tip: "Audio output" },
+  ];
 
   return (
-    <div className="sidebar-slot">
-      <div className="sidebar-pill">
-        <button
-          className="sb-btn"
-          data-tip="Copy link"
-          onClick={copyRoomLink}
-        >
-          <IoCopyOutline size={18} />
-        </button>
+    <div className={`sidebar-slot ${slotBg}`}>
+      <div className="sidebar" ref={sidebarRef}>
+        {!isPreview && (
+          <div className="sb-top">
+            {meetingButtons.map((btn) => (
+              <button
+                key={btn.key}
+                className={`sb-btn ${btn.active ? "is-active" : ""}`}
+                data-tip={btn.tip}
+                onClick={btn.onClick}
+                aria-label={btn.tip}
+              >
+                {btn.badge > 0 && <div className="sb-badge">{btn.badge}</div>}
+                <Icon name={btn.icon} />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {!isPreview && <div className="sb-sep" />}
+
+        <div className="sb-mid">
+          {deviceControls.map((ctrl) => (
+            <div className="sb-split" key={ctrl.key}>
+              <button
+                className={`sb-icon-btn ${ctrl.active ? "is-active" : "is-off"}`}
+                data-tip={ctrl.tip}
+                aria-label={ctrl.tip}
+                onClick={() => ctrl.kind && toggleTrack(ctrl.kind)}
+                disabled={ctrl.kind && !localStream}
+              >
+                <Icon name={ctrl.icon} />
+              </button>
+              <button
+                className="sb-chev-btn"
+                aria-label={`${ctrl.key} options`}
+                onClick={() => toggleDropdown(`${ctrl.key}-dd-${isPreview ? "prev" : "meet"}`)}
+              >
+                <Icon name="chevron" width={7} height={7} strokeWidth={3.5} />
+              </button>
+              <Dropdown
+                id={`${ctrl.key}-dd-${isPreview ? "prev" : "meet"}`}
+                open={openDropdown === `${ctrl.key}-dd-${isPreview ? "prev" : "meet"}`}
+                label={ctrl.key === "mic" ? "Microphone" : ctrl.key === "cam" ? "Camera" : "Speaker / Output"}
+                items={dropdownItems[ctrl.key]}
+              />
+            </div>
+          ))}
+        </div>
 
         <div className="sb-sep" />
 
-        <button
-          className={`sb-btn ${!trackStatus.video ? "off" : "active"}`}
-          data-tip={trackStatus.video ? "Turn off camera" : "Turn on camera"}
-          onClick={() => toggleTrack("video")}
-          disabled={!localStream}
-        >
-          <IoVideocam size={18} />
-        </button>
-
-        <button
-          className={`sb-btn ${!trackStatus.audio ? "off" : "active"}`}
-          data-tip={trackStatus.audio ? "Mute" : "Unmute"}
-          onClick={() => toggleTrack("audio")}
-          disabled={!localStream}
-        >
-          <HiMicrophone size={18} />
-        </button>
-
-        <div className="sb-sep" />
-
-        <button
-          className="sb-btn"
-          data-tip="Share screen"
-          disabled={isPreview}
-        >
-          <TbScreenShare size={18} />
-        </button>
-
-        <button
-          className="sb-btn"
-          data-tip="Chat"
-          disabled={isPreview}
-        >
-          <IoChatboxOutline size={18} />
-        </button>
-
-        <div className="sb-sep" />
-
-        <button
-          className="sb-btn danger"
-          data-tip="Leave"
-          onClick={leaveRoom}
-          disabled={isPreview}
-        >
-          <IoExitOutline size={18} />
-        </button>
+        <div className="sb-bot">
+          {isPreview && (
+            <button className="sb-btn" data-tip="Copy link" aria-label="Copy link" onClick={copyRoomLink}>
+              <Icon name="copy" />
+            </button>
+          )}
+          <button className="sb-btn is-danger" data-tip="Leave room" aria-label="Leave room" onClick={leaveRoom}>
+            <Icon name="leave" />
+          </button>
+        </div>
       </div>
     </div>
   );
 };
+
+const Dropdown = ({ open, label, items }) => {
+  if (!open) return null;
+  return (
+    <div className="sb-dropdown open">
+      <div className="sb-dd-label">{label}</div>
+      {items.map((item) => (
+        <div key={item.label} className={`sb-dd-item ${item.active ? "active" : ""}`}>
+          {item.active ? (
+            <div className="sb-dd-check">
+              <Icon name="check" width={8} height={8} strokeWidth={3} />
+            </div>
+          ) : (
+            <div className="sb-dd-dot" />
+          )}
+          {item.label}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const dropdownItems = {
+  mic: [
+    { label: "Default Microphone", active: true },
+    { label: "AirPods Pro", active: false },
+    { label: "MacBook Microphone", active: false },
+  ],
+  cam: [
+    { label: "FaceTime HD Camera", active: true },
+    { label: "OBS Virtual Camera", active: false },
+  ],
+  spk: [
+    { label: "AirPods Pro", active: true },
+    { label: "MacBook Speakers", active: false },
+    { label: "External Monitor", active: false },
+  ],
+};
+

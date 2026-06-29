@@ -2,6 +2,7 @@ import { createContext, useRef, useEffect, useReducer, useState } from "react";
 import { io } from "socket.io-client";
 import Peer from "peerjs";
 import { reducerFun } from "./reducer";
+import { SOCKET_EVENTS } from "./socketEvents";
 
 export const ReduxContext = createContext();
 export const SocketContext = createContext();
@@ -18,32 +19,52 @@ export const ReduxContextWrapper = ({ children }) => {
   const socketRef = useRef(null);
   const peerRef = useRef(null);
   const localStreamRef = useRef(null);
+  const roomIDRef = useRef(null);
+  const callsRef = useRef({});
   const [state, dispatch] = useReducer(reducerFun, initialState);
   const [peerReady, setPeerReady] = useState(false);
-  const { localStream } = state;
+  const [socket, setSocket] = useState(null);
+  const { localStream, roomID } = state;
 
-  // Keep localStreamRef in sync so event handlers always have the latest stream
-  // without needing to re-create the socket/peer connection on every stream change
   useEffect(() => {
     localStreamRef.current = localStream;
   }, [localStream]);
 
+  useEffect(() => {
+    roomIDRef.current = roomID;
+  }, [roomID]);
+
+  // Close PeerJS calls and stop remote streams for removed peers
+  useEffect(() => {
+    const currentPeers = new Set(Object.keys(state.connections));
+    Object.entries(callsRef.current).forEach(([peerID, call]) => {
+      if (!currentPeers.has(peerID)) {
+        call.close();
+        delete callsRef.current[peerID];
+      }
+    });
+  }, [state.connections]);
+
   // Initialize socket and peer once on mount
   useEffect(() => {
     peerRef.current = new Peer();
-    socketRef.current = io(
+    const socketInstance = io(
       import.meta.env.VITE_SOCKET_URL || "http://localhost:8002"
     );
+    socketRef.current = socketInstance;
+    setSocket(socketInstance);
 
     peerRef.current.on("open", () => {
       setPeerReady(true);
     });
 
-    socketRef.current.on("user_joined", ({ userID }) => {
-      if (!localStreamRef.current) return;
+    socketRef.current.on(SOCKET_EVENTS.USER_JOINED, ({ userID }) => {
+      if (!localStreamRef.current || !peerRef.current) return;
       const call = peerRef.current.call(userID, localStreamRef.current);
-      call.on("stream", () =>
-        dispatch({ type: "ADD_CONNECTION", payload: call })
+      if (!call) return;
+      callsRef.current[call.peer] = call;
+      call.on("stream", (stream) =>
+        dispatch({ type: "ADD_CONNECTION", payload: { peer: call.peer, stream } })
       );
       call.on("close", () =>
         dispatch({ type: "REMOVE_CONNECTION", payload: call.peer })
@@ -53,29 +74,36 @@ export const ReduxContextWrapper = ({ children }) => {
     peerRef.current.on("call", (call) => {
       if (!localStreamRef.current) return;
       call.answer(localStreamRef.current);
-      call.on("stream", () =>
-        dispatch({ type: "ADD_CONNECTION", payload: call })
+      callsRef.current[call.peer] = call;
+      call.on("stream", (stream) =>
+        dispatch({ type: "ADD_CONNECTION", payload: { peer: call.peer, stream } })
       );
       call.on("close", () =>
         dispatch({ type: "REMOVE_CONNECTION", payload: call.peer })
       );
     });
 
-    socketRef.current.on("user_disconnected", ({ userID }) => {
+    socketRef.current.on(SOCKET_EVENTS.USER_DISCONNECTED, ({ userID }) => {
+      callsRef.current[userID]?.close();
+      delete callsRef.current[userID];
       dispatch({ type: "REMOVE_CONNECTION", payload: userID });
     });
 
     return () => {
-      socketRef.current?.off("user_joined");
-      socketRef.current?.off("user_disconnected");
+      socketRef.current?.off(SOCKET_EVENTS.USER_JOINED);
+      socketRef.current?.off(SOCKET_EVENTS.USER_DISCONNECTED);
       peerRef.current?.off("call");
       socketRef.current?.disconnect();
       peerRef.current?.destroy();
+      Object.values(callsRef.current).forEach((call) => call.close());
+      callsRef.current = {};
+      setSocket(null);
     };
   }, []);
 
   const joinRoomFunc = (roomID) => {
-    socketRef.current.emit("join_room", {
+    if (!socketRef.current || !peerRef.current?.id) return;
+    socketRef.current.emit(SOCKET_EVENTS.JOIN_ROOM, {
       roomID,
       userID: peerRef.current.id,
     });
@@ -83,16 +111,22 @@ export const ReduxContextWrapper = ({ children }) => {
   };
 
   const leaveRoomFunc = () => {
-    socketRef.current.emit("user_disconnect", {
-      userID: peerRef.current.id,
-      roomID: state.roomID,
-    });
+    const currentRoomID = roomIDRef.current;
+    if (!socketRef.current || !peerRef.current?.id) return;
+    if (currentRoomID) {
+      socketRef.current.emit(SOCKET_EVENTS.USER_DISCONNECT, {
+        userID: peerRef.current.id,
+        roomID: currentRoomID,
+      });
+    }
+    Object.values(callsRef.current).forEach((call) => call.close());
+    callsRef.current = {};
     dispatch({ type: "LEAVE_ROOM" });
   };
 
   return (
     <ReduxContext.Provider value={[state, dispatch]}>
-      <SocketContext.Provider value={{ joinRoomFunc, leaveRoomFunc, peerReady }}>
+      <SocketContext.Provider value={{ joinRoomFunc, leaveRoomFunc, peerReady, socket }}>
         {children}
       </SocketContext.Provider>
     </ReduxContext.Provider>
