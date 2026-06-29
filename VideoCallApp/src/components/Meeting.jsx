@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext, useRef, useCallback } from "react";
 import { ReduxContext, SocketContext } from "../redux/reduxContextWrapper";
+import { SOCKET_EVENTS } from "../redux/socketEvents";
 import { Preview } from "./Preview";
 import { Room } from "./Room";
 import { Sidebar } from "./Sidebar";
@@ -69,8 +70,8 @@ export const Meeting = () => {
       dispatch({ type: "ADD_MESSAGE", payload: { ...msg, me: isMe } });
       if (!isMe && activePanelRef.current !== "chat") setUnreadCount((c) => c + 1);
     };
-    currentSocket.on("receive_message", handler);
-    return () => currentSocket.off("receive_message", handler);
+    currentSocket.on(SOCKET_EVENTS.RECEIVE_MESSAGE, handler);
+    return () => currentSocket.off(SOCKET_EVENTS.RECEIVE_MESSAGE, handler);
   }, [socket, dispatch]);
 
   const handleSendMessage = useCallback(
@@ -83,7 +84,7 @@ export const Meeting = () => {
         text,
         timestamp: Date.now(),
       };
-      socket.emit("send_message", { roomID: state.roomID, message: msg });
+      socket.emit(SOCKET_EVENTS.SEND_MESSAGE, { roomID: state.roomID, message: msg });
     },
     [socket, state.roomID, name]
   );

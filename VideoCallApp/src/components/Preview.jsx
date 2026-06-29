@@ -1,6 +1,7 @@
 import React, { useContext, useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { ReduxContext, SocketContext } from "../redux/reduxContextWrapper";
+import { SOCKET_EVENTS } from "../redux/socketEvents";
 import { useTrackStatus } from "../hooks/useTrackStatus";
 import { VideoTile } from "./VideoTile";
 import { NiceAvatar } from "./CharacterAvatars";
@@ -17,7 +18,7 @@ export const Preview = ({ setConnected }) => {
 
   useEffect(() => {
     if (!socket || !roomID) return;
-    socket.emit("check_room", { roomID }, ({ count }) => {
+    socket.emit(SOCKET_EVENTS.CHECK_ROOM, { roomID }, ({ count }) => {
       setPeerCount(count);
     });
   }, [socket, roomID]);

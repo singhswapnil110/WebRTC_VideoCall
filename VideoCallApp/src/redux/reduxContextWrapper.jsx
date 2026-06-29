@@ -2,6 +2,7 @@ import { createContext, useRef, useEffect, useReducer, useState } from "react";
 import { io } from "socket.io-client";
 import Peer from "peerjs";
 import { reducerFun } from "./reducer";
+import { SOCKET_EVENTS } from "./socketEvents";
 
 export const ReduxContext = createContext();
 export const SocketContext = createContext();
@@ -57,7 +58,7 @@ export const ReduxContextWrapper = ({ children }) => {
       setPeerReady(true);
     });
 
-    socketRef.current.on("user_joined", ({ userID }) => {
+    socketRef.current.on(SOCKET_EVENTS.USER_JOINED, ({ userID }) => {
       if (!localStreamRef.current || !peerRef.current) return;
       const call = peerRef.current.call(userID, localStreamRef.current);
       if (!call) return;
@@ -82,15 +83,15 @@ export const ReduxContextWrapper = ({ children }) => {
       );
     });
 
-    socketRef.current.on("user_disconnected", ({ userID }) => {
+    socketRef.current.on(SOCKET_EVENTS.USER_DISCONNECTED, ({ userID }) => {
       callsRef.current[userID]?.close();
       delete callsRef.current[userID];
       dispatch({ type: "REMOVE_CONNECTION", payload: userID });
     });
 
     return () => {
-      socketRef.current?.off("user_joined");
-      socketRef.current?.off("user_disconnected");
+      socketRef.current?.off(SOCKET_EVENTS.USER_JOINED);
+      socketRef.current?.off(SOCKET_EVENTS.USER_DISCONNECTED);
       peerRef.current?.off("call");
       socketRef.current?.disconnect();
       peerRef.current?.destroy();
@@ -102,7 +103,7 @@ export const ReduxContextWrapper = ({ children }) => {
 
   const joinRoomFunc = (roomID) => {
     if (!socketRef.current || !peerRef.current?.id) return;
-    socketRef.current.emit("join_room", {
+    socketRef.current.emit(SOCKET_EVENTS.JOIN_ROOM, {
       roomID,
       userID: peerRef.current.id,
     });
@@ -113,7 +114,7 @@ export const ReduxContextWrapper = ({ children }) => {
     const currentRoomID = roomIDRef.current;
     if (!socketRef.current || !peerRef.current?.id) return;
     if (currentRoomID) {
-      socketRef.current.emit("user_disconnect", {
+      socketRef.current.emit(SOCKET_EVENTS.USER_DISCONNECT, {
         userID: peerRef.current.id,
         roomID: currentRoomID,
       });
