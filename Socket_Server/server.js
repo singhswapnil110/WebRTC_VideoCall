@@ -54,7 +54,7 @@ io.on("connection", (socket) => {
   socket.on(SOCKET_EVENTS.SEND_MESSAGE, ({ roomID, message }) => {
     if (!isValidRoomID(roomID) || !socket.rooms.has(roomID)) return;
     if (!message || typeof message.text !== "string" || message.text.length === 0 || message.text.length > 4000) return;
-    io.to(roomID).emit(SOCKET_EVENTS.RECEIVE_MESSAGE, message);
+    socket.to(roomID).emit(SOCKET_EVENTS.RECEIVE_MESSAGE, message);
   });
 
   socket.on("disconnecting", () => {
