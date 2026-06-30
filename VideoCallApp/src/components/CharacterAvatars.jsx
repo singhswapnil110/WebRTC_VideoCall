@@ -1,12 +1,8 @@
 import React, { useMemo } from "react";
-import Avatar from "react-nice-avatar";
-import { genConfig } from "react-nice-avatar";
+import { renderAvatarSvg } from "./avatarSvg";
 
 export const NiceAvatar = ({ id, className = "cam-avatar", size = 64 }) => {
-  const config = useMemo(() => genConfig(id), [id]);
-  return (
-    <div className={className}>
-      <Avatar style={{ width: size, height: size }} config={config} />
-    </div>
-  );
+  const svg = useMemo(() => renderAvatarSvg(id, size), [id, size]);
+
+  return <div className={className} dangerouslySetInnerHTML={{ __html: svg }} />;
 };
