@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { renderAvatarSvg } from "./avatarSvg";
+import { renderAvatarSvg, renderAvatarSvgDataUri } from "./avatarSvg";
 
 describe("renderAvatarSvg", () => {
+  it("returns a safe svg data uri", () => {
+    expect(renderAvatarSvgDataUri("alice", 18)).toContain("data:image/svg+xml;utf8,");
+  });
+
   it("returns inline svg markup", () => {
     expect(renderAvatarSvg("alice", 18)).toContain("<svg");
     expect(renderAvatarSvg("alice", 18)).toContain('width="18"');
