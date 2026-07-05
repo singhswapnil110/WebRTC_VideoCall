@@ -30,11 +30,22 @@ describe("reducer", () => {
 
   it("adds and removes connections without mutations", () => {
     const stream = mockStream();
+    const nextStream = mockStream();
     const state1 = reducerFun(initialState, {
       type: "ADD_CONNECTION",
-      payload: { peer: "peer-abc", stream },
+      payload: { peer: "peer-abc", stream, name: "Alice" },
     });
-    expect(state1.connections["peer-abc"]).toEqual({ peer: "peer-abc", remoteStream: stream });
+    expect(state1.connections["peer-abc"]).toEqual({ peer: "peer-abc", remoteStream: stream, name: "Alice" });
+
+    const stateWithUpdatedStream = reducerFun(state1, {
+      type: "ADD_CONNECTION",
+      payload: { peer: "peer-abc", stream: nextStream },
+    });
+    expect(stateWithUpdatedStream.connections["peer-abc"]).toEqual({
+      peer: "peer-abc",
+      remoteStream: nextStream,
+      name: "Alice",
+    });
 
     const state2 = reducerFun(state1, {
       type: "REMOVE_CONNECTION",
