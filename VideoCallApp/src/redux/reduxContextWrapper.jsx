@@ -15,6 +15,8 @@ const initialState = {
   messages: [],
 };
 
+const peerNameFallback = (peerID) => peerID?.slice(-4)?.toUpperCase() || "??";
+
 export const ReduxContextWrapper = ({ children }) => {
   const socketRef = useRef(null);
   const peerRef = useRef(null);
@@ -71,7 +73,14 @@ export const ReduxContextWrapper = ({ children }) => {
       if (!call) return;
       callsRef.current[call.peer] = call;
       call.on("stream", (stream) =>
-        dispatch({ type: "ADD_CONNECTION", payload: { peer: call.peer, stream, name: userName || call.metadata?.userName } })
+        dispatch({
+          type: "ADD_CONNECTION",
+          payload: {
+            peer: call.peer,
+            stream,
+            name: userName || peerNameFallback(call.peer),
+          },
+        })
       );
       call.on("close", () =>
         dispatch({ type: "REMOVE_CONNECTION", payload: call.peer })
@@ -83,7 +92,14 @@ export const ReduxContextWrapper = ({ children }) => {
       call.answer(localStreamRef.current);
       callsRef.current[call.peer] = call;
       call.on("stream", (stream) =>
-        dispatch({ type: "ADD_CONNECTION", payload: { peer: call.peer, stream, name: call.metadata?.userName } })
+        dispatch({
+          type: "ADD_CONNECTION",
+          payload: {
+            peer: call.peer,
+            stream,
+            name: call.metadata?.userName || peerNameFallback(call.peer),
+          },
+        })
       );
       call.on("close", () =>
         dispatch({ type: "REMOVE_CONNECTION", payload: call.peer })
