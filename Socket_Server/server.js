@@ -32,7 +32,6 @@ io.on("connection", (socket) => {
     const normalizedUserName = typeof userName === "string" ? userName.trim().slice(0, 64) : "";
     socket.join(roomID);
     socket.data.userID = userID;
-    socket.data.userName = normalizedUserName;
     socket.to(roomID).emit(SOCKET_EVENTS.USER_JOINED, { userID, userName: normalizedUserName });
   });
 
