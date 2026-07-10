@@ -27,11 +27,12 @@ server.listen(PORT, () => console.log(`Server started at PORT:${PORT}`));
 const isValidRoomID = (roomID) => typeof roomID === "string" && roomID.length > 0 && roomID.length <= 64;
 
 io.on("connection", (socket) => {
-  socket.on(SOCKET_EVENTS.JOIN_ROOM, ({ roomID, userID }) => {
+  socket.on(SOCKET_EVENTS.JOIN_ROOM, ({ roomID, userID, userName }) => {
     if (!isValidRoomID(roomID) || typeof userID !== "string" || userID.length === 0) return;
+    const normalizedUserName = typeof userName === "string" ? userName.trim().slice(0, 64) : "";
     socket.join(roomID);
     socket.data.userID = userID;
-    socket.to(roomID).emit(SOCKET_EVENTS.USER_JOINED, { userID });
+    socket.to(roomID).emit(SOCKET_EVENTS.USER_JOINED, { userID, userName: normalizedUserName });
   });
 
   socket.on(SOCKET_EVENTS.USER_DISCONNECT, ({ roomID }) => {

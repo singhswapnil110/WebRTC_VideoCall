@@ -91,7 +91,7 @@ export const Meeting = () => {
 
   const participantList = Object.values(connections).map((conn) => ({
     id: conn.peer,
-    name: conn.peer?.slice(-4)?.toUpperCase() ?? "??",
+    name: conn.name || conn.peer?.slice(-4)?.toUpperCase() || "??",
     muted: !conn.remoteStream?.getAudioTracks?.()[0]?.enabled,
     stream: conn.remoteStream,
   }));

@@ -13,12 +13,16 @@ export function reducerFun(state, action) {
       };
 
     case "ADD_CONNECTION": {
-      const { peer, stream } = action.payload;
+      const { peer, stream, name } = action.payload;
       return {
         ...state,
         connections: {
           ...state.connections,
-          [peer]: { peer, remoteStream: stream },
+          [peer]: {
+            peer,
+            remoteStream: stream,
+            name: name || state.connections[peer]?.name || "",
+          },
         },
       };
     }

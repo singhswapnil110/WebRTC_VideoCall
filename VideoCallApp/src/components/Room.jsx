@@ -35,7 +35,7 @@ export const Room = ({ captionsOn }) => {
       const peerMuted = !conn.remoteStream?.getAudioTracks?.()[0]?.enabled;
       list.push({
         key: conn.peer || shortId,
-        name: shortId,
+        name: conn.name || shortId,
         stream: conn.remoteStream,
         speaking: false,
         avatarId: conn.peer,
