@@ -19,12 +19,32 @@ const io = new SocketIO(server, {
   },
 });
 const PORT = process.env.PORT || 8002;
+const MAX_MESSAGE_LENGTH = 4000;
+const MAX_CAPTION_TEXT_LENGTH = 500;
 
 app.use(express.static(path.resolve("./public")));
 
 server.listen(PORT, () => console.log(`Server started at PORT:${PORT}`));
 
 const isValidRoomID = (roomID) => typeof roomID === "string" && roomID.length > 0 && roomID.length <= 64;
+
+const isValidCaption = (caption) => {
+  if (!caption || typeof caption !== "object") return false;
+  if (typeof caption.captionId !== "string" || caption.captionId.length === 0 || caption.captionId.length > 120) return false;
+  if (typeof caption.senderId !== "string" || caption.senderId.length === 0 || caption.senderId.length > 120) return false;
+  if (typeof caption.senderName !== "string" || caption.senderName.trim().length === 0 || caption.senderName.length > 80) return false;
+  if (typeof caption.text !== "string" || caption.text.trim().length === 0 || caption.text.length > MAX_CAPTION_TEXT_LENGTH) return false;
+  if (typeof caption.isFinal !== "boolean") return false;
+  if (!Number.isInteger(caption.seq) || caption.seq < 1) return false;
+  if (!Number.isFinite(caption.timestamp)) return false;
+  if (
+    caption.detectedLanguage !== undefined &&
+    (typeof caption.detectedLanguage !== "string" || caption.detectedLanguage.length > 24)
+  ) {
+    return false;
+  }
+  return true;
+};
 
 io.on("connection", (socket) => {
   socket.on(SOCKET_EVENTS.JOIN_ROOM, ({ roomID, userID, userName }) => {
@@ -54,8 +74,14 @@ io.on("connection", (socket) => {
 
   socket.on(SOCKET_EVENTS.SEND_MESSAGE, ({ roomID, message }) => {
     if (!isValidRoomID(roomID) || !socket.rooms.has(roomID)) return;
-    if (!message || typeof message.text !== "string" || message.text.length === 0 || message.text.length > 4000) return;
-    socket.to(roomID).emit(SOCKET_EVENTS.RECEIVE_MESSAGE, message);
+    if (!message || typeof message.text !== "string" || message.text.length === 0 || message.text.length > MAX_MESSAGE_LENGTH) return;
+    io.to(roomID).emit(SOCKET_EVENTS.RECEIVE_MESSAGE, message);
+  });
+
+  socket.on("send_caption", ({ roomID, caption }) => {
+    if (!isValidRoomID(roomID) || !socket.rooms.has(roomID)) return;
+    if (!isValidCaption(caption)) return;
+    io.to(roomID).emit("receive_caption", caption);
   });
 
   socket.on("disconnecting", () => {
