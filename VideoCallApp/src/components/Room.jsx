@@ -13,6 +13,11 @@ const gridLayout = (length) => {
   return { rows: 5, columns: 6 };
 };
 
+const CAPTION_STATUS_TEXT = {
+  loading: "Preparing live captions…",
+  ready: "Captions ready",
+};
+
 const CaptionLine = ({ caption }) => {
   if (!caption) return null;
   return (
@@ -23,19 +28,20 @@ const CaptionLine = ({ caption }) => {
   );
 };
 
-export const Room = ({ captionsOn, captionStatus = "idle", currentCaption, previousCaption }) => {
+export const Room = ({
+  captionsOn,
+  captionStatus = "idle",
+  captionError,
+  currentCaption,
+  previousCaption,
+  localMuted = false,
+}) => {
   const [state] = useContext(ReduxContext);
   const { connections, localStream, name } = state;
 
-  const localMuted = !localStream?.getAudioTracks?.()[0]?.enabled;
   const peers = useMemo(() => Object.values(connections), [connections]);
-  const statusCaption = captionsOn && !currentCaption
-    ? captionStatus === "loading"
-      ? "Preparing live captions…"
-      : captionStatus === "ready"
-        ? "Captions ready"
-        : null
-    : null;
+
+  const statusCaption = captionsOn && !currentCaption ? CAPTION_STATUS_TEXT[captionStatus] ?? null : null;
 
   const tiles = useMemo(() => {
     const list = [];
@@ -107,7 +113,10 @@ export const Room = ({ captionsOn, captionStatus = "idle", currentCaption, previ
             <CaptionLine caption={currentCaption} />
           </div>
         )}
-        {captionsOn && statusCaption && (
+        {captionsOn && captionError && (
+          <div className="caption-status is-error">{captionError.message}</div>
+        )}
+        {captionsOn && !captionError && statusCaption && (
           <div className="caption-status">{statusCaption}</div>
         )}
       </div>

@@ -51,12 +51,12 @@ export const Sidebar = ({
   const slotBg = isPreview ? "prev-slot" : "meet-slot";
   const captionsTip = !captionsSupported
     ? "Live captions unavailable in this browser"
-    : captionStatus === "loading"
-      ? "Loading caption model"
-      : panels.captions
-        ? "Turn captions off"
-        : captionError?.code === "not-allowed"
-          ? "Microphone speech access blocked"
+    : captionError
+      ? captionError.message
+      : captionStatus === "loading"
+        ? "Loading caption model"
+        : panels.captions
+          ? "Turn captions off"
           : "Turn captions on";
 
   const meetingButtons = [
@@ -71,7 +71,6 @@ export const Sidebar = ({
       active: panels.captions,
       onClick: () => onTogglePanel("captions"),
       disabled: !captionsSupported,
-      subdued: !captionsSupported,
     },
     { key: "translate", tip: "Live translate", icon: "translate", active: panels.translate, onClick: () => onTogglePanel("translate") },
   ];
@@ -90,7 +89,7 @@ export const Sidebar = ({
             {meetingButtons.map((btn) => (
               <button
                 key={btn.key}
-                className={`sb-btn ${btn.active ? "is-active" : ""} ${btn.subdued ? "is-subdued" : ""}`}
+                className={`sb-btn ${btn.active ? "is-active" : ""} ${btn.disabled ? "is-subdued" : ""}`}
                 data-tip={btn.tip}
                 onClick={btn.onClick}
                 aria-label={btn.tip}

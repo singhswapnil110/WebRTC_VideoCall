@@ -37,36 +37,31 @@ export const Meeting = () => {
     currentCaption,
     previousCaption,
     publishCaption,
-    clearCurrentCaption,
+    clearOwnCaption,
     clearAllCaptions,
   } = useRoomCaptions({
     socket,
     roomID,
     senderId: socket?.id,
     senderName: name || "You",
-    enabled: captionsOn,
+    // Gated on captionsEnabled, not captionsOn, so a result that lands just
+    // after the mic is muted is not broadcast.
+    enabled: captionsEnabled,
   });
 
   const { supported: captionsSupported, status: captionStatus } = useCaptionTranscriber({
     enabled: captionsEnabled,
     localStream,
     maxUtteranceMs: 4000,
-    onResult: ({ text, isFinal, detectedLanguage }) => {
-      publishCaption({
-        text,
-        isFinal,
-        detectedLanguage,
-      });
+    onResult: ({ text, isFinal }) => {
+      publishCaption({ text, isFinal });
     },
     onError: setCaptionError,
     onStart: () => setCaptionError(null),
-    onEnd: () => {
-      if (!captionsEnabled) {
-        clearCurrentCaption();
-      }
-    },
   });
 
+  // Captions off clears the whole bar; muting only drops this user's own
+  // in-progress line.
   useEffect(() => {
     if (!captionsOn) {
       clearAllCaptions();
@@ -76,9 +71,9 @@ export const Meeting = () => {
 
   useEffect(() => {
     if (!trackStatus.audio) {
-      clearCurrentCaption();
+      clearOwnCaption();
     }
-  }, [trackStatus.audio, clearCurrentCaption]);
+  }, [trackStatus.audio, clearOwnCaption]);
 
   const panels = {
     chat: activePanel === "chat",
@@ -103,15 +98,10 @@ export const Meeting = () => {
   useEffect(() => {
     let mounted = true;
     navigator.mediaDevices
-      .getUserMedia({
-        video: true,
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: false,
-          channelCount: 1,
-        },
-      })
+      // These constraints apply to the stream sent to every peer, so they stay
+      // at the browser defaults; caption-specific conditioning belongs in the
+      // audio worklet, not in the call's outgoing audio.
+      .getUserMedia({ video: true, audio: true })
       .then((stream) => {
         if (!mounted) {
           stream.getTracks().forEach((t) => t.stop());
@@ -166,7 +156,7 @@ export const Meeting = () => {
   const localUser = {
     id: "local",
     name: name ? `You (${name})` : "You",
-    muted: !localStream?.getAudioTracks?.()[0]?.enabled,
+    muted: !trackStatus.audio,
     stream: localStream,
   };
 
@@ -178,8 +168,10 @@ export const Meeting = () => {
             <Room
               captionsOn={captionsOn}
               captionStatus={captionStatus}
+              captionError={captionError}
               currentCaption={currentCaption}
               previousCaption={previousCaption}
+              localMuted={!trackStatus.audio}
             />
           </div>
           <SidePanel open={panels.chat}>
@@ -201,7 +193,11 @@ export const Meeting = () => {
           </SidePanel>
         </>
       ) : (
-        <Preview setConnected={setConnected} />
+        <Preview
+          setConnected={setConnected}
+          trackStatus={trackStatus}
+          toggleTrack={toggleTrack}
+        />
       )}
       <Sidebar
         isPreview={!isConnected}
