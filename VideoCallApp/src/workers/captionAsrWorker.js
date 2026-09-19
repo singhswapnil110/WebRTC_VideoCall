@@ -1,12 +1,19 @@
 import { env, pipeline } from "@huggingface/transformers";
 
 const TARGET_SAMPLE_RATE = 16000;
+
+// These match the library defaults per device and are stated explicitly
+// because they are load-bearing: the quantized graph has no WebGPU kernels for
+// its MatMulInteger nodes and silently falls back to CPU, so WebGPU needs fp32.
+// The q8 wasm path requires @huggingface/transformers >= 4.3 — the onnxruntime
+// bundled with 4.2 fails to build a session for it ("Missing required scale
+// ... MatMulNBits"), which is why package.json floors the dependency there.
+const WEBGPU_AVAILABLE = typeof navigator !== "undefined" && Boolean(navigator.gpu);
+const DEVICE = WEBGPU_AVAILABLE ? "webgpu" : "wasm";
+const DTYPE = WEBGPU_AVAILABLE ? "fp32" : "q8";
+
 const DEFAULT_CONFIG = {
   model: "Xenova/whisper-tiny",
-  device: "wasm",
-  dtype: "q8",
-  task: "transcribe",
-  language: null,
   maxUtteranceMs: 4000,
   preRollMs: 250,
   hangoverMs: 450,
@@ -23,9 +30,11 @@ let config = { ...DEFAULT_CONFIG };
 let transcriber = null;
 let transcriberPromise = null;
 let processing = false;
-let pendingDecode = null;
+// Two slots: a queued final is never displaced by a later partial, otherwise an
+// utterance whose decode is still in flight loses its text entirely.
+let pendingFinal = null;
+let pendingPartial = null;
 let workerGeneration = 0;
-let finalizedUtteranceId = 0;
 
 const createState = () => ({
   inSpeech: false,
@@ -34,6 +43,7 @@ const createState = () => ({
   preRollSamples: 0,
   currentChunks: [],
   currentSamples: 0,
+  speechMs: 0,
   silenceMs: 0,
   lastPartialAtMs: 0,
 });
@@ -94,9 +104,9 @@ const getRms = (audio) => {
 
 const resetSession = () => {
   workerGeneration += 1;
-  finalizedUtteranceId = 0;
   state = createState();
-  pendingDecode = null;
+  pendingFinal = null;
+  pendingPartial = null;
 };
 
 const rememberPreRoll = (chunk) => {
@@ -104,7 +114,7 @@ const rememberPreRoll = (chunk) => {
   state.preRollSamples += chunk.length;
 
   const maxSamples = msToSamples(config.preRollMs);
-  while (state.preRollSamples > maxSamples && state.preRollChunks.length) {
+  while (state.preRollSamples > maxSamples && state.preRollChunks.length > 1) {
     const removed = state.preRollChunks.shift();
     state.preRollSamples -= removed.length;
   }
@@ -117,6 +127,17 @@ const startSpeech = () => {
   state.currentSamples = state.preRollSamples;
   state.preRollChunks = [];
   state.preRollSamples = 0;
+  state.speechMs = 0;
+  state.silenceMs = 0;
+  state.lastPartialAtMs = 0;
+};
+
+const endUtterance = () => {
+  state.inSpeech = false;
+  state.utteranceId = 0;
+  state.currentChunks = [];
+  state.currentSamples = 0;
+  state.speechMs = 0;
   state.silenceMs = 0;
   state.lastPartialAtMs = 0;
 };
@@ -128,40 +149,50 @@ const appendChunk = (chunk) => {
 
 const queueDecode = (kind, utteranceId, audio, generation) => {
   if (!audio.length) return;
-  pendingDecode = { kind, utteranceId, audio, generation };
+  const request = { kind, utteranceId, audio, generation };
+  if (kind === "final") {
+    // A queued partial for the same utterance is now redundant.
+    if (pendingPartial?.utteranceId === utteranceId) pendingPartial = null;
+    pendingFinal = request;
+  } else {
+    // Latest partial wins; finals are never touched.
+    pendingPartial = request;
+  }
   void processQueue();
 };
 
+const takeNextRequest = () => {
+  if (pendingFinal) {
+    const request = pendingFinal;
+    pendingFinal = null;
+    return request;
+  }
+  const request = pendingPartial;
+  pendingPartial = null;
+  return request;
+};
+
 const processQueue = async () => {
-  if (processing || !pendingDecode) return;
+  if (processing || (!pendingFinal && !pendingPartial)) return;
 
   processing = true;
-  const request = pendingDecode;
-  pendingDecode = null;
+  const request = takeNextRequest();
 
   try {
     const pipe = await ensureTranscriber();
-    const result = await pipe(request.audio, {
-      task: config.task,
-      language: config.language || undefined,
-      force_full_sequences: request.kind === "final",
-    });
+    const result = await pipe(request.audio);
 
     const text = normalizeText(result?.text);
     if (!text || request.generation !== workerGeneration) {
       return;
     }
 
-    if (request.kind === "partial") {
-      const stalePartial =
-        request.utteranceId !== state.utteranceId || request.utteranceId <= finalizedUtteranceId;
-      if (stalePartial) return;
+    // A partial only makes sense while its utterance is still the live one.
+    if (request.kind === "partial" && request.utteranceId !== state.utteranceId) {
+      return;
     }
 
-    post(request.kind, {
-      text,
-      detectedLanguage: config.language || undefined,
-    });
+    post(request.kind, { text });
   } catch (error) {
     post("error", {
       code: "transcription-failed",
@@ -169,34 +200,27 @@ const processQueue = async () => {
     });
   } finally {
     processing = false;
-    if (pendingDecode) {
+    if (pendingFinal || pendingPartial) {
       void processQueue();
     }
   }
 };
 
-const closeUtterance = (reason) => {
+const closeUtterance = () => {
   const utteranceId = state.utteranceId;
   const audio = flattenChunks(state.currentChunks, state.currentSamples);
   const generation = workerGeneration;
 
-  finalizedUtteranceId = utteranceId;
-  state.inSpeech = false;
-  state.currentChunks = [];
-  state.currentSamples = 0;
-  state.silenceMs = 0;
-  state.lastPartialAtMs = 0;
-
+  endUtterance();
   queueDecode("final", utteranceId, audio, generation);
-  post("status", { state: "idle", reason });
 };
 
 const ensureTranscriber = async () => {
   if (transcriber) return transcriber;
   if (!transcriberPromise) {
     transcriberPromise = pipeline("automatic-speech-recognition", config.model, {
-      device: config.device,
-      dtype: config.dtype,
+      device: DEVICE,
+      dtype: DTYPE,
     })
       .then((instance) => {
         transcriber = instance;
@@ -225,19 +249,38 @@ const handleAudio = (chunk, inputRate) => {
       return;
     }
     startSpeech();
-    post("status", { state: "listening" });
   }
 
   appendChunk(audio);
 
   if (hasSpeech) {
+    state.speechMs += chunkMs;
     state.silenceMs = 0;
   } else {
     state.silenceMs += chunkMs;
   }
 
   const currentMs = samplesToMs(state.currentSamples);
+
+  // Only decode once enough of the buffer is actually speech — otherwise a
+  // cough or key press gets sent to Whisper, which reliably hallucinates a
+  // sentence for near-silent audio.
+  const hasEnoughSpeech = state.speechMs >= config.minSpeechMs;
+
+  if (currentMs >= config.maxUtteranceMs) {
+    if (hasEnoughSpeech) closeUtterance();
+    else endUtterance();
+    return;
+  }
+
+  if (!hasSpeech && state.silenceMs >= config.hangoverMs) {
+    if (hasEnoughSpeech) closeUtterance();
+    else endUtterance();
+    return;
+  }
+
   const shouldEmitPartial =
+    hasEnoughSpeech &&
     currentMs >= config.minPartialMs &&
     currentMs - state.lastPartialAtMs >= config.partialIntervalMs;
 
@@ -250,37 +293,24 @@ const handleAudio = (chunk, inputRate) => {
       workerGeneration
     );
   }
-
-  if (currentMs >= config.maxUtteranceMs) {
-    closeUtterance("max-utterance");
-    return;
-  }
-
-  if (!hasSpeech && state.silenceMs >= config.hangoverMs && currentMs >= config.minSpeechMs) {
-    closeUtterance("silence");
-  }
 };
 
 self.onmessage = async (event) => {
   const { data } = event;
 
   if (data?.type === "init") {
-    config = {
-      ...config,
-      ...data,
-      device: data.device || config.device,
-      dtype: data.dtype || config.dtype,
-      language: data.language ?? config.language,
-    };
+    if (Number.isFinite(data.maxUtteranceMs)) {
+      config = { ...config, maxUtteranceMs: data.maxUtteranceMs };
+    }
 
     resetSession();
-    post("status", { state: "loading" });
 
     try {
       await ensureTranscriber();
       post("ready", {
         model: config.model,
-        device: config.device,
+        device: DEVICE,
+        dtype: DTYPE,
         sampleRate: TARGET_SAMPLE_RATE,
       });
     } catch (error) {
@@ -301,6 +331,5 @@ self.onmessage = async (event) => {
 
   if (data?.type === "reset") {
     resetSession();
-    post("status", { state: "idle", reason: "reset" });
   }
 };

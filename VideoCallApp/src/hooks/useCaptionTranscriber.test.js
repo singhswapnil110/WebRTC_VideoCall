@@ -121,16 +121,13 @@ describe("useCaptionTranscriber", () => {
     worker.emit({ type: "partial", text: "hello" });
     worker.emit({ type: "final", text: "hello world" });
 
-    expect(onResult).toHaveBeenNthCalledWith(1, {
-      text: "hello",
-      isFinal: false,
-      detectedLanguage: undefined,
-    });
-    expect(onResult).toHaveBeenNthCalledWith(2, {
-      text: "hello world",
-      isFinal: true,
-      detectedLanguage: undefined,
-    });
+    expect(onResult).toHaveBeenNthCalledWith(1, { text: "hello", isFinal: false });
+    expect(onResult).toHaveBeenNthCalledWith(2, { text: "hello world", isFinal: true });
+  });
+
+  it("does not spawn the worker until captions are enabled", () => {
+    renderHook(() => useCaptionTranscriber({ enabled: false, localStream: createStream() }));
+    expect(MockWorker.instances).toHaveLength(0);
   });
 
   it("reports loading status while worker initializes", async () => {

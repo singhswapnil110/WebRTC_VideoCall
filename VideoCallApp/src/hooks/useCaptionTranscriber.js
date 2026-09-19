@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const TARGET_SAMPLE_RATE = 16000;
-const DEFAULT_MODEL = "Xenova/whisper-tiny";
-
-const getAudioContextConstructor = () => window.AudioContext || window.webkitAudioContext || null;
+const getAudioContextConstructor = () =>
+  (typeof window === "undefined" ? null : window.AudioContext || window.webkitAudioContext) || null;
 
 const canTranscribeLocally = () =>
   typeof window !== "undefined" &&
@@ -18,7 +16,6 @@ export function useCaptionTranscriber({
   onResult,
   onError,
   onStart,
-  onEnd,
 } = {}) {
   const workerRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -31,22 +28,19 @@ export function useCaptionTranscriber({
   const onResultRef = useRef(onResult);
   const onErrorRef = useRef(onError);
   const onStartRef = useRef(onStart);
-  const onEndRef = useRef(onEnd);
-  const [supported, setSupported] = useState(false);
+  const [supported] = useState(canTranscribeLocally);
   const [status, setStatus] = useState("idle");
-  const [error, setError] = useState(null);
 
   onResultRef.current = onResult;
   onErrorRef.current = onError;
   onStartRef.current = onStart;
-  onEndRef.current = onEnd;
 
-  useEffect(() => {
-    setSupported(canTranscribeLocally());
-  }, []);
-
-  useEffect(() => {
-    if (!canTranscribeLocally()) return undefined;
+  // The worker statically imports the transformers runtime, so it is created on
+  // first use rather than at mount — a visitor who never turns captions on
+  // should not pay for that chunk. It is kept alive afterwards so toggling
+  // captions does not re-download the model.
+  const ensureWorker = () => {
+    if (workerRef.current) return workerRef.current;
 
     const worker = new Worker(new URL("../workers/captionAsrWorker.js", import.meta.url), {
       type: "module",
@@ -54,11 +48,6 @@ export function useCaptionTranscriber({
 
     worker.onmessage = ({ data }) => {
       if (!data?.type) return;
-
-      if (data.type === "status") {
-        setStatus(data.state || "idle");
-        return;
-      }
 
       if (data.type === "ready") {
         readyRef.current = true;
@@ -69,11 +58,7 @@ export function useCaptionTranscriber({
       }
 
       if (data.type === "partial" || data.type === "final") {
-        onResultRef.current?.({
-          text: data.text,
-          isFinal: data.type === "final",
-          detectedLanguage: data.detectedLanguage,
-        });
+        onResultRef.current?.({ text: data.text, isFinal: data.type === "final" });
         return;
       }
 
@@ -83,7 +68,6 @@ export function useCaptionTranscriber({
           message: data.message || "Local captions failed.",
         };
         setStatus("error");
-        setError(nextError);
         initResolverRef.current.reject?.(nextError);
         initResolverRef.current = { resolve: null, reject: null };
         onErrorRef.current?.(nextError);
@@ -91,23 +75,16 @@ export function useCaptionTranscriber({
     };
 
     workerRef.current = worker;
-
-    return () => {
-      initResolverRef.current.reject?.({
-        code: "worker-disposed",
-        message: "Caption worker was disposed.",
-      });
-      initResolverRef.current = { resolve: null, reject: null };
-      readyRef.current = false;
-      setStatus("idle");
-      worker.terminate();
-      workerRef.current = null;
-    };
-  }, []);
+    return worker;
+  };
 
   const teardownAudioGraph = async () => {
-    workletNodeRef.current?.port?.postMessage?.({ type: "flush" });
-    workletNodeRef.current?.disconnect?.();
+    // Detach first: a chunk delivered after the worker has been reset would
+    // open a phantom utterance on the next session.
+    const node = workletNodeRef.current;
+    if (node?.port) node.port.onmessage = null;
+
+    node?.disconnect?.();
     sourceNodeRef.current?.disconnect?.();
     sinkNodeRef.current?.disconnect?.();
 
@@ -118,15 +95,11 @@ export function useCaptionTranscriber({
     const currentContext = audioContextRef.current;
     audioContextRef.current = null;
     if (currentContext) {
-      await currentContext.close();
+      await currentContext.close().catch(() => {});
     }
   };
 
-  const ensureWorkerReady = async () => {
-    if (!workerRef.current) {
-      throw { code: "worker-unavailable", message: "Caption worker is unavailable." };
-    }
-
+  const ensureWorkerReady = async (worker) => {
     if (!initPromiseRef.current) {
       initPromiseRef.current = new Promise((resolve, reject) => {
         initResolverRef.current = { resolve, reject };
@@ -136,18 +109,14 @@ export function useCaptionTranscriber({
     }
 
     readyRef.current = false;
-    workerRef.current.postMessage({
-      type: "init",
-      model: DEFAULT_MODEL,
-      device: navigator.gpu ? "webgpu" : "wasm",
-      dtype: navigator.gpu ? undefined : "q8",
-      maxUtteranceMs,
-    });
+    // Device and dtype are decided inside the worker, which is the only place
+    // that can observe a load failure.
+    worker.postMessage({ type: "init", maxUtteranceMs });
 
     return initPromiseRef.current;
   };
 
-  const setupAudioGraph = async (stream) => {
+  const setupAudioGraph = async (stream, isCancelled) => {
     if (!stream) {
       throw { code: "missing-stream", message: "Local audio stream is unavailable." };
     }
@@ -161,53 +130,68 @@ export function useCaptionTranscriber({
       throw { code: "unsupported-browser", message: "Local captions are unavailable in this browser." };
     }
 
-    const context = new AudioContextConstructor({
-      latencyHint: "interactive",
-      sampleRate: TARGET_SAMPLE_RATE,
-    });
+    // Run at the device's own rate: forcing 16 kHz here makes
+    // createMediaStreamSource unreliable on WebKit. The worker resamples.
+    const context = new AudioContextConstructor({ latencyHint: "interactive" });
 
-    await context.audioWorklet.addModule(new URL("../audio/captionAudioWorklet.js", import.meta.url));
-    if (context.state === "suspended") {
-      await context.resume();
+    try {
+      await context.audioWorklet.addModule(new URL("../audio/captionAudioWorklet.js", import.meta.url));
+      if (context.state === "suspended") {
+        await context.resume();
+      }
+      if (isCancelled()) {
+        await context.close().catch(() => {});
+        return;
+      }
+
+      const source = context.createMediaStreamSource(stream);
+      const node = new AudioWorkletNode(context, "caption-audio-processor", {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+      });
+      const sink = context.createGain();
+      sink.gain.value = 0;
+
+      node.port.onmessage = ({ data }) => {
+        if (data?.type !== "audio" || !workerRef.current || !readyRef.current || !data.audio) return;
+        workerRef.current.postMessage(
+          {
+            type: "audio",
+            audio: data.audio,
+            sampleRate: data.sampleRate || context.sampleRate,
+          },
+          [data.audio.buffer]
+        );
+      };
+
+      source.connect(node);
+      node.connect(sink);
+      sink.connect(context.destination);
+
+      if (isCancelled()) {
+        node.port.onmessage = null;
+        node.disconnect();
+        source.disconnect();
+        sink.disconnect();
+        await context.close().catch(() => {});
+        return;
+      }
+
+      audioContextRef.current = context;
+      sourceNodeRef.current = source;
+      workletNodeRef.current = node;
+      sinkNodeRef.current = sink;
+    } catch (error) {
+      await context.close().catch(() => {});
+      throw error;
     }
-
-    const source = context.createMediaStreamSource(stream);
-    const node = new AudioWorkletNode(context, "caption-audio-processor", {
-      numberOfInputs: 1,
-      numberOfOutputs: 1,
-      outputChannelCount: [1],
-    });
-    const sink = context.createGain();
-    sink.gain.value = 0;
-
-    node.port.onmessage = ({ data }) => {
-      if (data?.type !== "audio" || !workerRef.current || !readyRef.current || !data.audio) return;
-      workerRef.current.postMessage(
-        {
-          type: "audio",
-          audio: data.audio,
-          sampleRate: data.sampleRate || context.sampleRate,
-        },
-        [data.audio.buffer]
-      );
-    };
-
-    source.connect(node);
-    node.connect(sink);
-    sink.connect(context.destination);
-
-    audioContextRef.current = context;
-    sourceNodeRef.current = source;
-    workletNodeRef.current = node;
-    sinkNodeRef.current = sink;
   };
 
   useEffect(() => {
     if (!enabled) {
+      // The previous run's cleanup already tore everything down.
       setStatus("idle");
-      workerRef.current?.postMessage({ type: "reset" });
-      void teardownAudioGraph();
-      onEndRef.current?.();
       return undefined;
     }
 
@@ -217,7 +201,6 @@ export function useCaptionTranscriber({
         message: "Local captions are unavailable in this browser.",
       };
       setStatus("error");
-      setError(unsupportedError);
       onErrorRef.current?.(unsupportedError);
       return undefined;
     }
@@ -229,19 +212,19 @@ export function useCaptionTranscriber({
         message: "A live microphone track is required for captions.",
       };
       setStatus("error");
-      setError(streamError);
       onErrorRef.current?.(streamError);
       return undefined;
     }
 
     let cancelled = false;
+    const isCancelled = () => cancelled;
 
     const start = async () => {
-      setError(null);
       setStatus("loading");
-      await ensureWorkerReady();
+      const worker = ensureWorker();
+      await ensureWorkerReady(worker);
       if (cancelled) return;
-      await setupAudioGraph(localStream);
+      await setupAudioGraph(localStream, isCancelled);
       if (cancelled) return;
       onStartRef.current?.();
     };
@@ -253,7 +236,6 @@ export function useCaptionTranscriber({
         message: nextError?.message || "Local captions failed to start.",
       };
       setStatus("error");
-      setError(normalizedError);
       onErrorRef.current?.(normalizedError);
     });
 
@@ -261,9 +243,24 @@ export function useCaptionTranscriber({
       cancelled = true;
       workerRef.current?.postMessage({ type: "reset" });
       void teardownAudioGraph();
-      onEndRef.current?.();
     };
   }, [enabled, localStream, maxUtteranceMs]);
 
-  return useMemo(() => ({ supported, status, error }), [supported, status, error]);
+  // Defined last on purpose: effect cleanups run in definition order, so the
+  // enable effect above still has a live worker to send its reset to.
+  useEffect(
+    () => () => {
+      initResolverRef.current.reject?.({
+        code: "worker-disposed",
+        message: "Caption worker was disposed.",
+      });
+      initResolverRef.current = { resolve: null, reject: null };
+      readyRef.current = false;
+      workerRef.current?.terminate();
+      workerRef.current = null;
+    },
+    []
+  );
+
+  return useMemo(() => ({ supported, status }), [supported, status]);
 }

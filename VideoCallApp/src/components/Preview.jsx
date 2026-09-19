@@ -2,19 +2,17 @@ import React, { useContext, useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { ReduxContext, SocketContext } from "../redux/reduxContextWrapper";
 import { SOCKET_EVENTS } from "../redux/socketEvents";
-import { useTrackStatus } from "../hooks/useTrackStatus";
 import { VideoTile } from "./VideoTile";
 import { NiceAvatar } from "./CharacterAvatars";
 import { Icon } from "./Icon";
 
-export const Preview = ({ setConnected }) => {
+export const Preview = ({ setConnected, trackStatus, toggleTrack }) => {
   const { roomID } = useParams();
   const [state, dispatch] = useContext(ReduxContext);
   const { joinRoomFunc, peerReady, socket } = useContext(SocketContext);
   const { localStream } = state;
   const [name, setName] = useState("");
   const [peerCount, setPeerCount] = useState(null);
-  const { status: trackStatus, toggleTrack } = useTrackStatus(localStream);
 
   useEffect(() => {
     if (!socket || !roomID) return;

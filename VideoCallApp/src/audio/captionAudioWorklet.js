@@ -5,6 +5,7 @@ class CaptionAudioWorkletProcessor extends AudioWorkletProcessor {
     super();
     this.buffer = new Float32Array(CHUNK_SIZE);
     this.offset = 0;
+    this.scratch = null;
     this.port.onmessage = (event) => {
       if (event.data?.type === "flush") {
         this.flush();
@@ -46,8 +47,18 @@ class CaptionAudioWorkletProcessor extends AudioWorkletProcessor {
       return true;
     }
 
+    // Already mono (the common case): append copies into the ring buffer, so
+    // there is no need to allocate a scratch frame on the audio thread.
+    if (input.length === 1) {
+      this.append(input[0]);
+      return true;
+    }
+
     const frameCount = input[0].length;
-    const mono = new Float32Array(frameCount);
+    if (!this.scratch || this.scratch.length !== frameCount) {
+      this.scratch = new Float32Array(frameCount);
+    }
+    const mono = this.scratch;
 
     for (let i = 0; i < frameCount; i += 1) {
       let sample = 0;
