@@ -1,4 +1,4 @@
-import { createContext, useRef, useEffect, useReducer, useState } from "react";
+import { createContext, useRef, useEffect, useReducer, useState, useCallback } from "react";
 import { io } from "socket.io-client";
 import Peer from "peerjs";
 import { reducerFun } from "./reducer";
@@ -13,6 +13,7 @@ const initialState = {
   roomID: null,
   name: "",
   messages: [],
+  raisedHands: {},
 };
 
 const peerNameFallback = (peerID) => peerID?.slice(-4)?.toUpperCase() || "??";
@@ -26,8 +27,33 @@ export const ReduxContextWrapper = ({ children }) => {
   const callsRef = useRef({});
   const [state, dispatch] = useReducer(reducerFun, initialState);
   const [peerReady, setPeerReady] = useState(false);
+  const [peerID, setPeerID] = useState(null);
   const [socket, setSocket] = useState(null);
   const { localStream, roomID, name } = state;
+  const isScreenSharing = Boolean(localStream?.getVideoTracks?.()[0]?.getSettings?.().displaySurface);
+
+  const syncLocalStream = useCallback((stream) => {
+    localStreamRef.current = stream;
+    dispatch({ type: "SET_LOCAL_STREAM", payload: stream });
+  }, []);
+
+  // Swaps the track on every open call in place, so screen share and device
+  // changes do not renegotiate or drop the call.
+  const replaceOutgoingTrack = useCallback(async (kind, nextTrack) => {
+    const swaps = Object.values(callsRef.current).map(async (call) => {
+      const sender = call.peerConnection
+        ?.getSenders?.()
+        ?.find((entry) => entry.track?.kind === kind || (!entry.track && kind === "video"));
+      if (sender) await sender.replaceTrack(nextTrack || null);
+    });
+    await Promise.all(swaps);
+  }, []);
+
+  const setRaisedHand = useCallback((raised) => {
+    const currentRoomID = roomIDRef.current;
+    if (!socketRef.current || !currentRoomID) return;
+    socketRef.current.emit(SOCKET_EVENTS.SET_RAISED_HAND, { roomID: currentRoomID, raised });
+  }, []);
 
   useEffect(() => {
     localStreamRef.current = localStream;
@@ -61,8 +87,9 @@ export const ReduxContextWrapper = ({ children }) => {
     socketRef.current = socketInstance;
     setSocket(socketInstance);
 
-    peerRef.current.on("open", () => {
+    peerRef.current.on("open", (id) => {
       setPeerReady(true);
+      setPeerID(id);
     });
 
     // A reconnected client gets a fresh server-side socket that is in no room,
@@ -94,9 +121,10 @@ export const ReduxContextWrapper = ({ children }) => {
           },
         })
       );
-      call.on("close", () =>
-        dispatch({ type: "REMOVE_CONNECTION", payload: call.peer })
-      );
+      call.on("close", () => {
+        dispatch({ type: "REMOVE_CONNECTION", payload: call.peer });
+        dispatch({ type: "CLEAR_RAISED_HAND", payload: call.peer });
+      });
     });
 
     peerRef.current.on("call", (call) => {
@@ -113,20 +141,37 @@ export const ReduxContextWrapper = ({ children }) => {
           },
         })
       );
-      call.on("close", () =>
-        dispatch({ type: "REMOVE_CONNECTION", payload: call.peer })
-      );
+      call.on("close", () => {
+        dispatch({ type: "REMOVE_CONNECTION", payload: call.peer });
+        dispatch({ type: "CLEAR_RAISED_HAND", payload: call.peer });
+      });
+    });
+
+    socketRef.current.on(SOCKET_EVENTS.ROOM_HAND_STATE, ({ hands }) => {
+      dispatch({ type: "SET_RAISED_HANDS", payload: hands || {} });
+    });
+
+    socketRef.current.on(SOCKET_EVENTS.RAISED_HAND_UPDATED, ({ userID, hand }) => {
+      if (!userID) return;
+      if (hand?.raised) {
+        dispatch({ type: "SET_RAISED_HAND", payload: { userID, hand } });
+      } else {
+        dispatch({ type: "CLEAR_RAISED_HAND", payload: userID });
+      }
     });
 
     socketRef.current.on(SOCKET_EVENTS.USER_DISCONNECTED, ({ userID }) => {
       callsRef.current[userID]?.close();
       delete callsRef.current[userID];
       dispatch({ type: "REMOVE_CONNECTION", payload: userID });
+      dispatch({ type: "CLEAR_RAISED_HAND", payload: userID });
     });
 
     return () => {
       socketRef.current?.off("connect");
       socketRef.current?.off(SOCKET_EVENTS.USER_JOINED);
+      socketRef.current?.off(SOCKET_EVENTS.ROOM_HAND_STATE);
+      socketRef.current?.off(SOCKET_EVENTS.RAISED_HAND_UPDATED);
       socketRef.current?.off(SOCKET_EVENTS.USER_DISCONNECTED);
       peerRef.current?.off("call");
       socketRef.current?.disconnect();
@@ -134,6 +179,7 @@ export const ReduxContextWrapper = ({ children }) => {
       Object.values(callsRef.current).forEach((call) => call.close());
       callsRef.current = {};
       setSocket(null);
+      setPeerID(null);
     };
   }, []);
 
@@ -163,7 +209,19 @@ export const ReduxContextWrapper = ({ children }) => {
 
   return (
     <ReduxContext.Provider value={[state, dispatch]}>
-      <SocketContext.Provider value={{ joinRoomFunc, leaveRoomFunc, peerReady, socket }}>
+      <SocketContext.Provider
+        value={{
+          joinRoomFunc,
+          leaveRoomFunc,
+          peerReady,
+          socket,
+          syncLocalStream,
+          replaceOutgoingTrack,
+          setRaisedHand,
+          isScreenSharing,
+          peerID,
+        }}
+      >
         {children}
       </SocketContext.Provider>
     </ReduxContext.Provider>

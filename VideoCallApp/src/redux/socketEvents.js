@@ -8,6 +8,9 @@ export const SOCKET_EVENTS = Object.freeze({
   RECEIVE_MESSAGE: "receive_message",
   SEND_CAPTION: "send_caption",
   RECEIVE_CAPTION: "receive_caption",
+  SET_RAISED_HAND: "set_raised_hand",
+  RAISED_HAND_UPDATED: "raised_hand_updated",
+  ROOM_HAND_STATE: "room_hand_state",
 });
 
 // Mirrored in Socket_Server/socketEvents.js, which also caps caption ids.

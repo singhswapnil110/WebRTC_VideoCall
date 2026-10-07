@@ -11,6 +11,13 @@ export const Sidebar = ({
   trackStatus,
   toggleTrack,
   captionStatus = "idle",
+  deviceOptions,
+  onSelectDevice,
+  onToggleScreenShare,
+  isScreenSharing,
+  onToggleRaisedHand,
+  raisedHand,
+  outputSwitchSupported,
 }) => {
   const [state] = useContext(ReduxContext);
   const { leaveRoomFunc } = useContext(SocketContext);
@@ -54,10 +61,22 @@ export const Sidebar = ({
       : "Turn captions on";
 
   const meetingButtons = [
-    { key: "share", tip: "Share screen", icon: "share", active: false, onClick: () => {} },
+    {
+      key: "share",
+      tip: isScreenSharing ? "Stop sharing" : "Share screen",
+      icon: "share",
+      active: isScreenSharing,
+      onClick: onToggleScreenShare,
+    },
     { key: "chat", tip: "Chat", icon: "chat", active: panels.chat, onClick: () => onTogglePanel("chat"), badge: messageCount },
     { key: "participants", tip: "Participants", icon: "participants", active: panels.participants, onClick: () => onTogglePanel("participants") },
-    { key: "hand", tip: "Raise hand", icon: "hand", active: false, onClick: () => {} },
+    {
+      key: "hand",
+      tip: raisedHand ? "Lower hand" : "Raise hand",
+      icon: "hand",
+      active: raisedHand,
+      onClick: onToggleRaisedHand,
+    },
     { key: "captions", tip: captionsTip, icon: "captions", active: panels.captions, onClick: () => onTogglePanel("captions") },
     { key: "translate", tip: "Live translate", icon: "translate", active: panels.translate, onClick: () => onTogglePanel("translate") },
   ];
@@ -65,7 +84,7 @@ export const Sidebar = ({
   const deviceControls = [
     { key: "mic", kind: "audio", icon: trackStatus.audio ? "mic" : "micOff", active: trackStatus.audio, tip: trackStatus.audio ? "Mute mic" : "Unmute mic" },
     { key: "cam", kind: "video", icon: trackStatus.video ? "cam" : "camOff", active: trackStatus.video, tip: trackStatus.video ? "Camera on" : "Camera off" },
-    { key: "spk", kind: null, icon: "volume", active: true, tip: "Audio output" },
+    { key: "spk", kind: null, icon: "volume", active: true, tip: outputSwitchSupported ? "Audio output" : "Audio output not supported" },
   ];
 
   return (
@@ -113,7 +132,13 @@ export const Sidebar = ({
                 id={`${ctrl.key}-dd-${isPreview ? "prev" : "meet"}`}
                 open={openDropdown === `${ctrl.key}-dd-${isPreview ? "prev" : "meet"}`}
                 label={ctrl.key === "mic" ? "Microphone" : ctrl.key === "cam" ? "Camera" : "Speaker / Output"}
-                items={dropdownItems[ctrl.key]}
+                items={deviceOptions?.[ctrl.key] || []}
+                onSelect={(value) => {
+                  if (!value) return;
+                  if (ctrl.key === "spk" && !outputSwitchSupported) return;
+                  onSelectDevice?.(DEVICE_KINDS[ctrl.key], value);
+                  setOpenDropdown(null);
+                }}
               />
             </div>
           ))}
@@ -136,13 +161,21 @@ export const Sidebar = ({
   );
 };
 
-const Dropdown = ({ open, label, items }) => {
+const DEVICE_KINDS = { mic: "audioinput", cam: "videoinput", spk: "audiooutput" };
+
+const Dropdown = ({ open, label, items, onSelect }) => {
   if (!open) return null;
   return (
     <div className="sb-dropdown open">
       <div className="sb-dd-label">{label}</div>
       {items.map((item) => (
-        <div key={item.label} className={`sb-dd-item ${item.active ? "active" : ""}`}>
+        <button
+          key={item.value || item.label}
+          type="button"
+          className={`sb-dd-item ${item.active ? "active" : ""}`}
+          onClick={() => !item.disabled && onSelect?.(item.value)}
+          disabled={item.disabled}
+        >
           {item.active ? (
             <div className="sb-dd-check">
               <Icon name="check" width={8} height={8} strokeWidth={3} />
@@ -150,26 +183,11 @@ const Dropdown = ({ open, label, items }) => {
           ) : (
             <div className="sb-dd-dot" />
           )}
-          {item.label}
-        </div>
+          <span>{item.label}</span>
+          {item.disabled && <span className="sb-dd-meta">Unavailable</span>}
+        </button>
       ))}
+      {items.length === 0 && <div className="sb-dd-empty">No devices found</div>}
     </div>
   );
-};
-
-const dropdownItems = {
-  mic: [
-    { label: "Default Microphone", active: true },
-    { label: "AirPods Pro", active: false },
-    { label: "MacBook Microphone", active: false },
-  ],
-  cam: [
-    { label: "FaceTime HD Camera", active: true },
-    { label: "OBS Virtual Camera", active: false },
-  ],
-  spk: [
-    { label: "AirPods Pro", active: true },
-    { label: "MacBook Speakers", active: false },
-    { label: "External Monitor", active: false },
-  ],
 };

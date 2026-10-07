@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 
-export const VideoTile = ({ stream, isLocal = false }) => {
+export const VideoTile = ({ stream, isLocal = false, sinkId = "" }) => {
   const videoRef = useRef();
 
   useEffect(() => {
@@ -17,6 +17,12 @@ export const VideoTile = ({ stream, isLocal = false }) => {
       el.srcObject = null;
     };
   }, [stream]);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || isLocal || !sinkId || typeof el.setSinkId !== "function") return;
+    el.setSinkId(sinkId).catch(() => {});
+  }, [isLocal, sinkId]);
 
   return (
     <video

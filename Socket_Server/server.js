@@ -36,6 +36,17 @@ const isUserInRoomOnAnotherSocket = (roomID, userID, socketID) => {
   return false;
 };
 
+// Raised hands per room, keyed by user id. In memory only, like the rooms themselves.
+const roomHands = new Map();
+
+const lowerHand = (roomID, userID) => {
+  const hands = roomHands.get(roomID);
+  if (!hands?.[userID]) return;
+  delete hands[userID];
+  if (Object.keys(hands).length === 0) roomHands.delete(roomID);
+  io.to(roomID).emit(SOCKET_EVENTS.RAISED_HAND_UPDATED, { userID, hand: null });
+};
+
 // Identity is stamped from the socket on relay, so only content is validated.
 const isValidCaptionContent = (caption) => {
   if (!caption || typeof caption !== "object") return false;
@@ -64,10 +75,12 @@ io.on("connection", (socket) => {
     socket.data.userID = userID;
     socket.data.userName = normalizedUserName;
     socket.to(roomID).emit(SOCKET_EVENTS.USER_JOINED, { userID, userName: normalizedUserName });
+    socket.emit(SOCKET_EVENTS.ROOM_HAND_STATE, { hands: roomHands.get(roomID) || {} });
   });
 
   socket.on(SOCKET_EVENTS.USER_DISCONNECT, ({ roomID }) => {
     if (!isValidRoomID(roomID)) return;
+    lowerHand(roomID, socket.data.userID);
     socket.to(roomID).emit(SOCKET_EVENTS.USER_DISCONNECTED, { userID: socket.data.userID });
     socket.leave(roomID);
   });
@@ -102,6 +115,20 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on(SOCKET_EVENTS.SET_RAISED_HAND, ({ roomID, raised } = {}) => {
+    const { userID, userName } = socket.data;
+    if (!isValidRoomID(roomID) || !socket.rooms.has(roomID) || !userID || typeof raised !== "boolean") return;
+    if (!raised) {
+      lowerHand(roomID, userID);
+      return;
+    }
+    // Identity comes from the socket, as for captions.
+    const hand = { userID, userName: userName || "", raised: true, timestamp: Date.now() };
+    if (!roomHands.has(roomID)) roomHands.set(roomID, {});
+    roomHands.get(roomID)[userID] = hand;
+    io.to(roomID).emit(SOCKET_EVENTS.RAISED_HAND_UPDATED, { userID, hand });
+  });
+
   socket.on("disconnecting", () => {
     const { userID } = socket.data;
     for (const room of socket.rooms) {
@@ -110,6 +137,7 @@ io.on("connection", (socket) => {
       // already reconnected and rejoined; announcing that stale socket would
       // tear down the call that was just restored.
       if (isUserInRoomOnAnotherSocket(room, userID, socket.id)) continue;
+      lowerHand(room, userID);
       socket.to(room).emit(SOCKET_EVENTS.USER_DISCONNECTED, { userID });
     }
   });
