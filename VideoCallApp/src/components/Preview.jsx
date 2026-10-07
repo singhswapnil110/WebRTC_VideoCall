@@ -9,7 +9,7 @@ import { Icon } from "./Icon";
 export const Preview = ({ setConnected, trackStatus, toggleTrack }) => {
   const { roomID } = useParams();
   const [state, dispatch] = useContext(ReduxContext);
-  const { joinRoomFunc, peerReady, socket } = useContext(SocketContext);
+  const { joinRoomFunc, peerReady, socket, socketReady, socketError } = useContext(SocketContext);
   const { localStream } = state;
   const [name, setName] = useState("");
   const [peerCount, setPeerCount] = useState(null);
@@ -66,10 +66,12 @@ export const Preview = ({ setConnected, trackStatus, toggleTrack }) => {
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
+            {socketError && <div className="preview-status error">{socketError}</div>}
+            {!socketError && !socketReady && <div className="preview-status">Connecting to the signaling server…</div>}
             <button
               className="preview-join"
               onClick={joinRoom}
-              disabled={!localStream || !peerReady || !name.trim()}
+              disabled={!localStream || !peerReady || !socketReady || !name.trim()}
             >
               Join Meeting
               <Icon name="arrowRight" width={13} height={13} strokeWidth={2.5} />
