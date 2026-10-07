@@ -93,7 +93,12 @@ export const Room = ({
             className={`v-tile ${tile.speaking ? "speaking" : ""}`}
           >
             {tile.stream ? (
-              <VideoTile stream={tile.stream} isLocal={tile.isLocal} sinkId={tile.isLocal ? "" : outputSinkId} />
+              <VideoTile
+                  stream={tile.stream}
+                  isLocal={tile.isLocal}
+                  sinkId={tile.isLocal ? "" : outputSinkId}
+                  fit={tile.isScreenSharing ? "contain" : "cover"}
+                />
             ) : tile.isLocal ? (
               <NiceAvatar id="local" className="cam-avatar" size={64} />
             ) : (

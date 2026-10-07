@@ -30,7 +30,6 @@ export const ReduxContextWrapper = ({ children }) => {
   const [peerID, setPeerID] = useState(null);
   const [socket, setSocket] = useState(null);
   const { localStream, roomID, name } = state;
-  const isScreenSharing = Boolean(localStream?.getVideoTracks?.()[0]?.getSettings?.().displaySurface);
 
   const syncLocalStream = useCallback((stream) => {
     localStreamRef.current = stream;
@@ -41,9 +40,10 @@ export const ReduxContextWrapper = ({ children }) => {
   // changes do not renegotiate or drop the call.
   const replaceOutgoingTrack = useCallback(async (kind, nextTrack) => {
     const swaps = Object.values(callsRef.current).map(async (call) => {
+      // Matched by the receiver's kind, which stays set after a sender's track is nulled.
       const sender = call.peerConnection
-        ?.getSenders?.()
-        ?.find((entry) => entry.track?.kind === kind || (!entry.track && kind === "video"));
+        ?.getTransceivers?.()
+        ?.find((transceiver) => transceiver.receiver.track?.kind === kind)?.sender;
       if (sender) await sender.replaceTrack(nextTrack || null);
     });
     await Promise.all(swaps);
@@ -121,10 +121,9 @@ export const ReduxContextWrapper = ({ children }) => {
           },
         })
       );
-      call.on("close", () => {
-        dispatch({ type: "REMOVE_CONNECTION", payload: call.peer });
-        dispatch({ type: "CLEAR_RAISED_HAND", payload: call.peer });
-      });
+      call.on("close", () =>
+        dispatch({ type: "REMOVE_CONNECTION", payload: call.peer })
+      );
     });
 
     peerRef.current.on("call", (call) => {
@@ -141,16 +140,17 @@ export const ReduxContextWrapper = ({ children }) => {
           },
         })
       );
-      call.on("close", () => {
-        dispatch({ type: "REMOVE_CONNECTION", payload: call.peer });
-        dispatch({ type: "CLEAR_RAISED_HAND", payload: call.peer });
-      });
+      call.on("close", () =>
+        dispatch({ type: "REMOVE_CONNECTION", payload: call.peer })
+      );
     });
 
     socketRef.current.on(SOCKET_EVENTS.ROOM_HAND_STATE, ({ hands }) => {
       dispatch({ type: "SET_RAISED_HANDS", payload: hands || {} });
     });
 
+    // The server owns hands and lowers them when a user leaves, so a dropped
+    // call alone does not clear one.
     socketRef.current.on(SOCKET_EVENTS.RAISED_HAND_UPDATED, ({ userID, hand }) => {
       if (!userID) return;
       if (hand?.raised) {
@@ -164,7 +164,6 @@ export const ReduxContextWrapper = ({ children }) => {
       callsRef.current[userID]?.close();
       delete callsRef.current[userID];
       dispatch({ type: "REMOVE_CONNECTION", payload: userID });
-      dispatch({ type: "CLEAR_RAISED_HAND", payload: userID });
     });
 
     return () => {
@@ -218,7 +217,6 @@ export const ReduxContextWrapper = ({ children }) => {
           syncLocalStream,
           replaceOutgoingTrack,
           setRaisedHand,
-          isScreenSharing,
           peerID,
         }}
       >

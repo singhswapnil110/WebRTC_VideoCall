@@ -129,7 +129,6 @@ export const Sidebar = ({
                 <Icon name="chevron" width={7} height={7} strokeWidth={3.5} />
               </button>
               <Dropdown
-                id={`${ctrl.key}-dd-${isPreview ? "prev" : "meet"}`}
                 open={openDropdown === `${ctrl.key}-dd-${isPreview ? "prev" : "meet"}`}
                 label={ctrl.key === "mic" ? "Microphone" : ctrl.key === "cam" ? "Camera" : "Speaker / Output"}
                 items={deviceOptions?.[ctrl.key] || []}
@@ -173,7 +172,7 @@ const Dropdown = ({ open, label, items, onSelect }) => {
           key={item.value || item.label}
           type="button"
           className={`sb-dd-item ${item.active ? "active" : ""}`}
-          onClick={() => !item.disabled && onSelect?.(item.value)}
+          onClick={() => onSelect?.(item.value)}
           disabled={item.disabled}
         >
           {item.active ? (

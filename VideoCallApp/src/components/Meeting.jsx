@@ -3,6 +3,7 @@ import { ReduxContext, SocketContext } from "../redux/reduxContextWrapper";
 import { SOCKET_EVENTS } from "../redux/socketEvents";
 import { useTrackStatus } from "../hooks/useTrackStatus";
 import { useCaptionTranscriber } from "../hooks/useCaptionTranscriber";
+import { useLocalMedia } from "../hooks/useLocalMedia";
 import { useRoomCaptions } from "../hooks/useRoomCaptions";
 import { Preview } from "./Preview";
 import { Room } from "./Room";
@@ -12,27 +13,10 @@ import { ChatPanel } from "./ChatPanel";
 import { ParticipantsPanel } from "./ParticipantsPanel";
 import { TranslatePanel } from "./TranslatePanel";
 
-const emptyDevices = { audioinput: [], videoinput: [], audiooutput: [] };
-
 const fallbackDeviceLabel = (kind, index) => {
   if (kind === "audioinput") return `Microphone ${index + 1}`;
   if (kind === "videoinput") return `Camera ${index + 1}`;
   return `Speaker ${index + 1}`;
-};
-
-// Only the device is pinned; processing stays at browser defaults because this
-// stream is what every peer hears.
-const deviceConstraint = (deviceId) => (deviceId ? { deviceId: { exact: deviceId } } : true);
-
-const setTrackEnabled = (track, enabled) => {
-  if (track) track.enabled = enabled;
-};
-
-const buildStream = (audioTrack, videoTrack) => {
-  const stream = new MediaStream();
-  if (audioTrack) stream.addTrack(audioTrack);
-  if (videoTrack) stream.addTrack(videoTrack);
-  return stream;
 };
 
 const outputSwitchSupported = typeof HTMLMediaElement !== "undefined" && "setSinkId" in HTMLMediaElement.prototype;
@@ -40,27 +24,21 @@ const outputSwitchSupported = typeof HTMLMediaElement !== "undefined" && "setSin
 export const Meeting = () => {
   const [isConnected, setConnected] = useState(false);
   const [state, dispatch] = useContext(ReduxContext);
-  const { socket, syncLocalStream, replaceOutgoingTrack, setRaisedHand, isScreenSharing, peerID } =
-    useContext(SocketContext);
-  const streamRef = useRef(null);
-  const displayTrackRef = useRef(null);
-  const selectedDevicesRef = useRef({ audioinput: "", videoinput: "", audiooutput: "" });
+  const { socket, syncLocalStream, replaceOutgoingTrack, setRaisedHand, peerID } = useContext(SocketContext);
+  const { isScreenSharing, toggleScreenShare, devices, selectedDeviceIds, selectDevice } = useLocalMedia({
+    syncLocalStream,
+    replaceOutgoingTrack,
+  });
 
   const [activePanel, setActivePanel] = useState(null);
   const [captionsOn, setCaptionsOn] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [captionError, setCaptionError] = useState(null);
-  const [devices, setDevices] = useState(emptyDevices);
-  const [selectedDeviceIds, setSelectedDeviceIds] = useState(selectedDevicesRef.current);
   const activePanelRef = useRef(activePanel);
 
   useEffect(() => {
     activePanelRef.current = activePanel;
   }, [activePanel]);
-
-  useEffect(() => {
-    selectedDevicesRef.current = selectedDeviceIds;
-  }, [selectedDeviceIds]);
 
   const { localStream, connections, messages, name, roomID, raisedHands } = state;
   const { status: trackStatus, toggleTrack } = useTrackStatus(localStream);
@@ -89,130 +67,6 @@ export const Meeting = () => {
     if (!captionsOn) setCaptionError(null);
   }, [captionsOn]);
 
-  const refreshDevices = useCallback(async () => {
-    if (!navigator.mediaDevices?.enumerateDevices) return;
-    const rawDevices = await navigator.mediaDevices.enumerateDevices();
-    const nextDevices = { audioinput: [], videoinput: [], audiooutput: [] };
-    rawDevices.forEach((device) => nextDevices[device.kind]?.push(device));
-
-    setDevices(nextDevices);
-    setSelectedDeviceIds((prev) => ({
-      audioinput: prev.audioinput || nextDevices.audioinput[0]?.deviceId || "",
-      videoinput: prev.videoinput || nextDevices.videoinput[0]?.deviceId || "",
-      audiooutput: prev.audiooutput || nextDevices.audiooutput[0]?.deviceId || "",
-    }));
-  }, []);
-
-  const acquireUserMedia = useCallback(
-    (deviceIds = selectedDevicesRef.current) =>
-      navigator.mediaDevices.getUserMedia({
-        video: deviceConstraint(deviceIds.videoinput),
-        audio: deviceConstraint(deviceIds.audioinput),
-      }),
-    []
-  );
-
-  const applyLocalStream = useCallback(
-    async (nextStream, { stopPrevious = true } = {}) => {
-      const previousStream = streamRef.current;
-      const audioTrack = nextStream.getAudioTracks()[0] || null;
-      const videoTrack = nextStream.getVideoTracks()[0] || null;
-
-      setTrackEnabled(audioTrack, trackStatus.audio);
-      setTrackEnabled(videoTrack, trackStatus.video);
-
-      await replaceOutgoingTrack("audio", audioTrack);
-      await replaceOutgoingTrack("video", videoTrack);
-
-      streamRef.current = nextStream;
-      syncLocalStream(nextStream);
-
-      if (stopPrevious && previousStream && previousStream !== nextStream) {
-        previousStream.getTracks().forEach((track) => track.stop());
-      }
-    },
-    [replaceOutgoingTrack, syncLocalStream, trackStatus.audio, trackStatus.video]
-  );
-
-  const restoreCameraTrack = useCallback(async () => {
-    const cameraStream = await acquireUserMedia(selectedDevicesRef.current);
-    displayTrackRef.current = null;
-    await applyLocalStream(cameraStream);
-    await refreshDevices();
-  }, [acquireUserMedia, applyLocalStream, refreshDevices]);
-
-  const stopScreenShare = useCallback(async () => {
-    const activeDisplayTrack = displayTrackRef.current;
-    if (!activeDisplayTrack) return;
-    displayTrackRef.current = null;
-    activeDisplayTrack.stop();
-    await restoreCameraTrack();
-  }, [restoreCameraTrack]);
-
-  const startScreenShare = useCallback(async () => {
-    if (isScreenSharing || !navigator.mediaDevices?.getDisplayMedia) return;
-    const previousStream = streamRef.current;
-    const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-    const displayTrack = displayStream.getVideoTracks()[0];
-    if (!displayTrack) return;
-
-    displayTrackRef.current = displayTrack;
-    // The browser's own "Stop sharing" control ends the track without going through us.
-    displayTrack.addEventListener(
-      "ended",
-      () => {
-        if (displayTrackRef.current !== displayTrack) return;
-        displayTrackRef.current = null;
-        restoreCameraTrack().catch((err) => console.error("Could not restore the camera:", err));
-      },
-      { once: true }
-    );
-
-    const nextStream = buildStream(localStream?.getAudioTracks?.()[0] || null, displayTrack);
-    await applyLocalStream(nextStream, { stopPrevious: false });
-    previousStream?.getVideoTracks?.().forEach((track) => track.stop());
-  }, [applyLocalStream, isScreenSharing, localStream, restoreCameraTrack]);
-
-  const handleToggleScreenShare = useCallback(() => {
-    const action = isScreenSharing ? stopScreenShare : startScreenShare;
-    // Cancelling the browser's share picker rejects; that is not an error worth surfacing.
-    action().catch((err) => {
-      if (err?.name !== "NotAllowedError") console.error("Screen share failed:", err);
-    });
-  }, [isScreenSharing, startScreenShare, stopScreenShare]);
-
-  const switchDevice = useCallback(
-    async (kind, deviceId) => {
-      const nextSelected = { ...selectedDevicesRef.current, [kind]: deviceId };
-      setSelectedDeviceIds(nextSelected);
-
-      if (kind === "audiooutput") return;
-      if (isScreenSharing && kind === "videoinput") return;
-
-      if (isScreenSharing && kind === "audioinput") {
-        const previousStream = streamRef.current;
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: deviceConstraint(deviceId), video: false });
-        const nextStream = buildStream(audioStream.getAudioTracks()[0] || null, displayTrackRef.current || null);
-        await applyLocalStream(nextStream, { stopPrevious: false });
-        previousStream?.getAudioTracks?.().forEach((track) => track.stop());
-        await refreshDevices();
-        return;
-      }
-
-      const nextStream = await acquireUserMedia(nextSelected);
-      await applyLocalStream(nextStream);
-      await refreshDevices();
-    },
-    [acquireUserMedia, applyLocalStream, isScreenSharing, refreshDevices]
-  );
-
-  const handleSelectDevice = useCallback(
-    (kind, deviceId) => {
-      switchDevice(kind, deviceId).catch((err) => console.error("Could not switch device:", err));
-    },
-    [switchDevice]
-  );
-
   const panels = {
     chat: activePanel === "chat",
     participants: activePanel === "participants",
@@ -228,35 +82,6 @@ export const Meeting = () => {
     if (key === "chat") setUnreadCount(0);
     setActivePanel((prev) => (prev === key ? null : key));
   }, []);
-
-  useEffect(() => {
-    let mounted = true;
-    acquireUserMedia(selectedDevicesRef.current)
-      .then(async (stream) => {
-        if (!mounted) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        syncLocalStream(stream);
-        await refreshDevices();
-      })
-      .catch((err) => {
-        console.error("Camera/microphone access denied:", err);
-      });
-
-    const handleDeviceChange = () => {
-      void refreshDevices();
-    };
-    navigator.mediaDevices?.addEventListener?.("devicechange", handleDeviceChange);
-
-    return () => {
-      mounted = false;
-      navigator.mediaDevices?.removeEventListener?.("devicechange", handleDeviceChange);
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      displayTrackRef.current?.stop();
-    };
-  }, [acquireUserMedia, refreshDevices, syncLocalStream]);
 
   useEffect(() => {
     if (!socket) return;
@@ -372,8 +197,8 @@ export const Meeting = () => {
         toggleTrack={toggleTrack}
         captionStatus={captionStatus}
         deviceOptions={deviceOptions}
-        onSelectDevice={handleSelectDevice}
-        onToggleScreenShare={handleToggleScreenShare}
+        onSelectDevice={selectDevice}
+        onToggleScreenShare={toggleScreenShare}
         isScreenSharing={isScreenSharing}
         onToggleRaisedHand={handleRaisedHandToggle}
         raisedHand={raisedHandLocal}
