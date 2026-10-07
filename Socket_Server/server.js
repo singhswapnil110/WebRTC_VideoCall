@@ -7,15 +7,24 @@ const { SOCKET_EVENTS, CAPTION_LIMITS } = require("./socketEvents");
 const app = express();
 const server = http.createServer(app);
 
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:5173,http://localhost:5174,http://localhost:5175")
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
+if (allowedOrigins.length === 0) {
+  console.error("ALLOWED_ORIGINS must list the app origins allowed to connect, e.g. http://localhost:5173");
+  process.exit(1);
+}
+
 const io = new SocketIO(server, {
-  cors: {
-    origin: allowedOrigins,
-    credentials: true,
+  cors: { origin: allowedOrigins },
+  // CORS headers only stop browsers reading polling responses; WebSocket
+  // upgrades ignore them, so the origin is checked on every handshake.
+  // Non-browser clients send no Origin and are not what this guards against.
+  allowRequest: (req, callback) => {
+    const { origin } = req.headers;
+    callback(null, !origin || allowedOrigins.includes(origin));
   },
 });
 const PORT = process.env.PORT || 8002;

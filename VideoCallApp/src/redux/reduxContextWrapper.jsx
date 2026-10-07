@@ -26,6 +26,8 @@ export const ReduxContextWrapper = ({ children }) => {
   const callsRef = useRef({});
   const [state, dispatch] = useReducer(reducerFun, initialState);
   const [peerReady, setPeerReady] = useState(false);
+  const [socketReady, setSocketReady] = useState(false);
+  const [socketError, setSocketError] = useState("");
   const [socket, setSocket] = useState(null);
   const { localStream, roomID, name } = state;
 
@@ -54,10 +56,15 @@ export const ReduxContextWrapper = ({ children }) => {
 
   // Initialize socket and peer once on mount
   useEffect(() => {
+    // No fallback address: a missing URL should say so, not quietly dial localhost.
+    const socketUrl = import.meta.env.VITE_SOCKET_URL?.trim();
+    if (!socketUrl) {
+      setSocketError("VITE_SOCKET_URL is not set, so there is no signaling server to join through.");
+      return;
+    }
+
     peerRef.current = new Peer();
-    const socketInstance = io(
-      import.meta.env.VITE_SOCKET_URL || "http://localhost:8002"
-    );
+    const socketInstance = io(socketUrl);
     socketRef.current = socketInstance;
     setSocket(socketInstance);
 
@@ -68,6 +75,8 @@ export const ReduxContextWrapper = ({ children }) => {
     // A reconnected client gets a fresh server-side socket that is in no room,
     // and peers have already dropped us, so rejoin and let them call back.
     socketInstance.on("connect", () => {
+      setSocketReady(true);
+      setSocketError("");
       const roomID = roomIDRef.current;
       if (!roomID || !peerRef.current?.id) return;
       socketInstance.emit(SOCKET_EVENTS.JOIN_ROOM, {
@@ -75,6 +84,14 @@ export const ReduxContextWrapper = ({ children }) => {
         userID: peerRef.current.id,
         userName: nameRef.current || "You",
       });
+    });
+
+    socketInstance.on("disconnect", () => setSocketReady(false));
+
+    // Socket.IO keeps retrying after this, and "connect" clears the error.
+    socketInstance.on("connect_error", () => {
+      setSocketReady(false);
+      setSocketError("Could not reach the signaling server.");
     });
 
     socketRef.current.on(SOCKET_EVENTS.USER_JOINED, ({ userID, userName }) => {
@@ -126,6 +143,8 @@ export const ReduxContextWrapper = ({ children }) => {
 
     return () => {
       socketRef.current?.off("connect");
+      socketRef.current?.off("disconnect");
+      socketRef.current?.off("connect_error");
       socketRef.current?.off(SOCKET_EVENTS.USER_JOINED);
       socketRef.current?.off(SOCKET_EVENTS.USER_DISCONNECTED);
       peerRef.current?.off("call");
@@ -134,6 +153,7 @@ export const ReduxContextWrapper = ({ children }) => {
       Object.values(callsRef.current).forEach((call) => call.close());
       callsRef.current = {};
       setSocket(null);
+      setSocketReady(false);
     };
   }, []);
 
@@ -163,7 +183,7 @@ export const ReduxContextWrapper = ({ children }) => {
 
   return (
     <ReduxContext.Provider value={[state, dispatch]}>
-      <SocketContext.Provider value={{ joinRoomFunc, leaveRoomFunc, peerReady, socket }}>
+      <SocketContext.Provider value={{ joinRoomFunc, leaveRoomFunc, peerReady, socket, socketReady, socketError }}>
         {children}
       </SocketContext.Provider>
     </ReduxContext.Provider>
