@@ -1,17 +1,23 @@
 import React, { useState, useContext, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ReduxContext, SocketContext } from "../redux/reduxContextWrapper";
-import { useTrackStatus } from "../hooks/useTrackStatus";
 import { Icon } from "./Icon";
 
-export const Sidebar = ({ isPreview, panels, onTogglePanel, messageCount }) => {
+export const Sidebar = ({
+  isPreview,
+  panels,
+  onTogglePanel,
+  messageCount,
+  trackStatus,
+  toggleTrack,
+  captionStatus = "idle",
+}) => {
   const [state] = useContext(ReduxContext);
   const { leaveRoomFunc } = useContext(SocketContext);
   const { localStream } = state;
   const { roomID } = useParams();
   const navigate = useNavigate();
 
-  const { status: trackStatus, toggleTrack } = useTrackStatus(localStream);
   const [openDropdown, setOpenDropdown] = useState(null);
   const sidebarRef = useRef(null);
 
@@ -41,13 +47,18 @@ export const Sidebar = ({ isPreview, panels, onTogglePanel, messageCount }) => {
   };
 
   const slotBg = isPreview ? "prev-slot" : "meet-slot";
+  const captionsTip = captionStatus === "loading"
+    ? "Loading caption model"
+    : panels.captions
+      ? "Turn captions off"
+      : "Turn captions on";
 
   const meetingButtons = [
     { key: "share", tip: "Share screen", icon: "share", active: false, onClick: () => {} },
     { key: "chat", tip: "Chat", icon: "chat", active: panels.chat, onClick: () => onTogglePanel("chat"), badge: messageCount },
     { key: "participants", tip: "Participants", icon: "participants", active: panels.participants, onClick: () => onTogglePanel("participants") },
     { key: "hand", tip: "Raise hand", icon: "hand", active: false, onClick: () => {} },
-    { key: "captions", tip: "Live captions", icon: "captions", active: panels.captions, onClick: () => onTogglePanel("captions") },
+    { key: "captions", tip: captionsTip, icon: "captions", active: panels.captions, onClick: () => onTogglePanel("captions") },
     { key: "translate", tip: "Live translate", icon: "translate", active: panels.translate, onClick: () => onTogglePanel("translate") },
   ];
 
@@ -162,4 +173,3 @@ const dropdownItems = {
     { label: "External Monitor", active: false },
   ],
 };
-

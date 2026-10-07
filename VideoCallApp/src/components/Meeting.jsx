@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useContext, useRef, useCallback } from "react";
+import React, { useState, useContext, useEffect, useRef, useCallback } from "react";
 import { ReduxContext, SocketContext } from "../redux/reduxContextWrapper";
 import { SOCKET_EVENTS } from "../redux/socketEvents";
+import { useTrackStatus } from "../hooks/useTrackStatus";
+import { useCaptionTranscriber } from "../hooks/useCaptionTranscriber";
+import { useRoomCaptions } from "../hooks/useRoomCaptions";
 import { Preview } from "./Preview";
 import { Room } from "./Room";
 import { Sidebar } from "./Sidebar";
@@ -18,12 +21,38 @@ export const Meeting = () => {
   const [activePanel, setActivePanel] = useState(null);
   const [captionsOn, setCaptionsOn] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [captionError, setCaptionError] = useState(null);
   const activePanelRef = useRef(activePanel);
+
   useEffect(() => {
     activePanelRef.current = activePanel;
   }, [activePanel]);
 
-  const { localStream, connections, messages, name } = state;
+  const { localStream, connections, messages, name, roomID } = state;
+  const { status: trackStatus, toggleTrack } = useTrackStatus(localStream);
+
+  const { currentCaption, previousCaption, publishCaption } = useRoomCaptions({
+    socket,
+    roomID,
+    senderId: socket?.id,
+    senderName: name || "You",
+    active: captionsOn,
+  });
+
+  // Mute is deliberately not part of this: a muted track is silence, which the
+  // engine already treats as the end of an utterance.
+  const { status: captionStatus } = useCaptionTranscriber({
+    enabled: captionsOn && isConnected,
+    localStream,
+    maxUtteranceMs: 4000,
+    onResult: publishCaption,
+    onError: setCaptionError,
+    onStart: () => setCaptionError(null),
+  });
+
+  useEffect(() => {
+    if (!captionsOn) setCaptionError(null);
+  }, [captionsOn]);
 
   const panels = {
     chat: activePanel === "chat",
@@ -76,7 +105,7 @@ export const Meeting = () => {
 
   const handleSendMessage = useCallback(
     (text) => {
-      if (!socket || !state.roomID) return;
+      if (!socket || !roomID) return;
       const msg = {
         id: `${socket.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         senderId: socket.id,
@@ -84,9 +113,9 @@ export const Meeting = () => {
         text,
         timestamp: Date.now(),
       };
-      socket.emit(SOCKET_EVENTS.SEND_MESSAGE, { roomID: state.roomID, message: msg });
+      socket.emit(SOCKET_EVENTS.SEND_MESSAGE, { roomID, message: msg });
     },
-    [socket, state.roomID, name]
+    [socket, roomID, name]
   );
 
   const participantList = Object.values(connections).map((conn) => ({
@@ -99,7 +128,7 @@ export const Meeting = () => {
   const localUser = {
     id: "local",
     name: name ? `You (${name})` : "You",
-    muted: !localStream?.getAudioTracks?.()[0]?.enabled,
+    muted: !trackStatus.audio,
     stream: localStream,
   };
 
@@ -108,7 +137,14 @@ export const Meeting = () => {
       {isConnected ? (
         <>
           <div className="app-main">
-            <Room captionsOn={captionsOn} />
+            <Room
+              captionsOn={captionsOn}
+              captionStatus={captionStatus}
+              captionError={captionError}
+              currentCaption={currentCaption}
+              previousCaption={previousCaption}
+              localMuted={!trackStatus.audio}
+            />
           </div>
           <SidePanel open={panels.chat}>
             <ChatPanel
@@ -129,9 +165,21 @@ export const Meeting = () => {
           </SidePanel>
         </>
       ) : (
-        <Preview setConnected={setConnected} />
+        <Preview
+          setConnected={setConnected}
+          trackStatus={trackStatus}
+          toggleTrack={toggleTrack}
+        />
       )}
-      <Sidebar isPreview={!isConnected} panels={panels} onTogglePanel={onTogglePanel} messageCount={unreadCount} />
+      <Sidebar
+        isPreview={!isConnected}
+        panels={panels}
+        onTogglePanel={onTogglePanel}
+        messageCount={unreadCount}
+        trackStatus={trackStatus}
+        toggleTrack={toggleTrack}
+        captionStatus={captionStatus}
+      />
     </div>
   );
 };

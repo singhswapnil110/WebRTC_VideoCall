@@ -6,4 +6,12 @@ export const SOCKET_EVENTS = Object.freeze({
   CHECK_ROOM: "check_room",
   SEND_MESSAGE: "send_message",
   RECEIVE_MESSAGE: "receive_message",
+  SEND_CAPTION: "send_caption",
+  RECEIVE_CAPTION: "receive_caption",
+});
+
+// Mirrored in Socket_Server/socketEvents.js, which also caps caption ids.
+export const CAPTION_LIMITS = Object.freeze({
+  MAX_TEXT_LENGTH: 500,
+  MAX_NAME_LENGTH: 64,
 });
