@@ -2,12 +2,7 @@ import { env, pipeline } from "@huggingface/transformers";
 
 const TARGET_SAMPLE_RATE = 16000;
 
-// These match the library defaults per device and are stated explicitly
-// because they are load-bearing: the quantized graph has no WebGPU kernels for
-// its MatMulInteger nodes and silently falls back to CPU, so WebGPU needs fp32.
-// The q8 wasm path requires @huggingface/transformers >= 4.3 — the onnxruntime
-// bundled with 4.2 fails to build a session for it ("Missing required scale
-// ... MatMulNBits"), which is why package.json floors the dependency there.
+// fp32 on WebGPU (quantized ops fall back to CPU); q8 on wasm needs transformers >= 4.3.
 const WEBGPU_AVAILABLE = typeof navigator !== "undefined" && Boolean(navigator.gpu);
 const DEVICE = WEBGPU_AVAILABLE ? "webgpu" : "wasm";
 const DTYPE = WEBGPU_AVAILABLE ? "fp32" : "q8";
@@ -30,9 +25,8 @@ let config = { ...DEFAULT_CONFIG };
 let transcriber = null;
 let transcriberPromise = null;
 let processing = false;
-// Two slots: a queued final is never displaced by a later partial, otherwise an
-// utterance whose decode is still in flight loses its text entirely.
-let pendingFinal = null;
+// Finals queue in order so a slow decoder costs latency, never words.
+let pendingFinals = [];
 let pendingPartial = null;
 let workerGeneration = 0;
 
@@ -69,32 +63,31 @@ const flattenChunks = (chunks, totalSamples) => {
   return merged;
 };
 
+// Only used when the browser refused a 16 kHz AudioContext. Averaging each
+// output window is a crude low-pass, which keeps high frequencies from
+// aliasing into the speech band.
 const resampleTo16k = (input, inputRate) => {
-  if (!(input instanceof Float32Array) || input.length === 0) {
-    return new Float32Array();
-  }
-
-  if (!inputRate || inputRate === TARGET_SAMPLE_RATE) {
-    return input;
-  }
+  if (!inputRate || inputRate === TARGET_SAMPLE_RATE) return input;
 
   const ratio = inputRate / TARGET_SAMPLE_RATE;
-  const outputLength = Math.max(1, Math.round(input.length / ratio));
-  const output = new Float32Array(outputLength);
+  const output = new Float32Array(Math.floor(input.length / ratio));
 
-  for (let i = 0; i < outputLength; i += 1) {
-    const position = i * ratio;
-    const left = Math.floor(position);
-    const right = Math.min(left + 1, input.length - 1);
-    const weight = position - left;
-    output[i] = input[left] * (1 - weight) + input[right] * weight;
+  for (let i = 0; i < output.length; i += 1) {
+    const start = Math.floor(i * ratio);
+    const end = Math.min(input.length, Math.floor((i + 1) * ratio));
+    if (end <= start) {
+      output[i] = input[Math.min(start, input.length - 1)];
+      continue;
+    }
+    let sum = 0;
+    for (let j = start; j < end; j += 1) sum += input[j];
+    output[i] = sum / (end - start);
   }
 
   return output;
 };
 
 const getRms = (audio) => {
-  if (!audio.length) return 0;
   let total = 0;
   for (let i = 0; i < audio.length; i += 1) {
     total += audio[i] * audio[i];
@@ -105,7 +98,7 @@ const getRms = (audio) => {
 const resetSession = () => {
   workerGeneration += 1;
   state = createState();
-  pendingFinal = null;
+  pendingFinals = [];
   pendingPartial = null;
 };
 
@@ -123,7 +116,7 @@ const rememberPreRoll = (chunk) => {
 const startSpeech = () => {
   state.inSpeech = true;
   state.utteranceId += 1;
-  state.currentChunks = state.preRollChunks.slice();
+  state.currentChunks = state.preRollChunks;
   state.currentSamples = state.preRollSamples;
   state.preRollChunks = [];
   state.preRollSamples = 0;
@@ -134,85 +127,53 @@ const startSpeech = () => {
 
 const endUtterance = () => {
   state.inSpeech = false;
-  state.utteranceId = 0;
   state.currentChunks = [];
   state.currentSamples = 0;
-  state.speechMs = 0;
-  state.silenceMs = 0;
-  state.lastPartialAtMs = 0;
 };
 
-const appendChunk = (chunk) => {
-  state.currentChunks.push(chunk);
-  state.currentSamples += chunk.length;
-};
-
-const queueDecode = (kind, utteranceId, audio, generation) => {
-  if (!audio.length) return;
-  const request = { kind, utteranceId, audio, generation };
+const queueDecode = (kind, utteranceId, audio) => {
+  const request = { kind, utteranceId, audio, generation: workerGeneration };
   if (kind === "final") {
-    // A queued partial for the same utterance is now redundant.
     if (pendingPartial?.utteranceId === utteranceId) pendingPartial = null;
-    pendingFinal = request;
+    pendingFinals.push(request);
   } else {
-    // Latest partial wins; finals are never touched.
     pendingPartial = request;
   }
   void processQueue();
 };
 
-const takeNextRequest = () => {
-  if (pendingFinal) {
-    const request = pendingFinal;
-    pendingFinal = null;
-    return request;
-  }
-  const request = pendingPartial;
-  pendingPartial = null;
-  return request;
-};
-
 const processQueue = async () => {
-  if (processing || (!pendingFinal && !pendingPartial)) return;
+  if (processing) return;
+  const request = pendingFinals.shift() ?? pendingPartial;
+  if (!request) return;
+  if (request === pendingPartial) pendingPartial = null;
 
   processing = true;
-  const request = takeNextRequest();
-
   try {
     const pipe = await ensureTranscriber();
     const result = await pipe(request.audio);
 
     const text = normalizeText(result?.text);
-    if (!text || request.generation !== workerGeneration) {
-      return;
-    }
+    if (!text || request.generation !== workerGeneration) return;
 
-    // A partial only makes sense while its utterance is still the live one.
-    if (request.kind === "partial" && request.utteranceId !== state.utteranceId) {
-      return;
-    }
+    const partialIsStale =
+      request.kind === "partial" && (!state.inSpeech || request.utteranceId !== state.utteranceId);
+    if (partialIsStale) return;
 
     post(request.kind, { text });
   } catch (error) {
-    post("error", {
-      code: "transcription-failed",
-      message: error?.message || "Local transcription failed.",
-    });
+    post("decode-error", { message: error?.message || "Local transcription failed." });
   } finally {
     processing = false;
-    if (pendingFinal || pendingPartial) {
-      void processQueue();
-    }
+    void processQueue();
   }
 };
 
 const closeUtterance = () => {
-  const utteranceId = state.utteranceId;
   const audio = flattenChunks(state.currentChunks, state.currentSamples);
-  const generation = workerGeneration;
-
+  const { utteranceId } = state;
   endUtterance();
-  queueDecode("final", utteranceId, audio, generation);
+  queueDecode("final", utteranceId, audio);
 };
 
 const ensureTranscriber = async () => {
@@ -235,7 +196,7 @@ const ensureTranscriber = async () => {
 };
 
 const handleAudio = (chunk, inputRate) => {
-  if (!transcriber || !(chunk instanceof Float32Array) || chunk.length === 0) return;
+  if (!transcriber || chunk.length === 0) return;
 
   const audio = resampleTo16k(chunk, inputRate);
   if (!audio.length) return;
@@ -251,7 +212,8 @@ const handleAudio = (chunk, inputRate) => {
     startSpeech();
   }
 
-  appendChunk(audio);
+  state.currentChunks.push(audio);
+  state.currentSamples += audio.length;
 
   if (hasSpeech) {
     state.speechMs += chunkMs;
@@ -261,19 +223,13 @@ const handleAudio = (chunk, inputRate) => {
   }
 
   const currentMs = samplesToMs(state.currentSamples);
-
-  // Only decode once enough of the buffer is actually speech — otherwise a
-  // cough or key press gets sent to Whisper, which reliably hallucinates a
-  // sentence for near-silent audio.
+  // Whisper hallucinates whole sentences from near-silence, so a burst too
+  // short to be speech is dropped rather than decoded.
   const hasEnoughSpeech = state.speechMs >= config.minSpeechMs;
+  const reachedEnd =
+    currentMs >= config.maxUtteranceMs || (!hasSpeech && state.silenceMs >= config.hangoverMs);
 
-  if (currentMs >= config.maxUtteranceMs) {
-    if (hasEnoughSpeech) closeUtterance();
-    else endUtterance();
-    return;
-  }
-
-  if (!hasSpeech && state.silenceMs >= config.hangoverMs) {
+  if (reachedEnd) {
     if (hasEnoughSpeech) closeUtterance();
     else endUtterance();
     return;
@@ -286,40 +242,26 @@ const handleAudio = (chunk, inputRate) => {
 
   if (shouldEmitPartial) {
     state.lastPartialAtMs = currentMs;
-    queueDecode(
-      "partial",
-      state.utteranceId,
-      flattenChunks(state.currentChunks, state.currentSamples),
-      workerGeneration
-    );
+    queueDecode("partial", state.utteranceId, flattenChunks(state.currentChunks, state.currentSamples));
   }
 };
 
-self.onmessage = async (event) => {
-  const { data } = event;
-
+self.onmessage = async ({ data }) => {
   if (data?.type === "init") {
     if (Number.isFinite(data.maxUtteranceMs)) {
       config = { ...config, maxUtteranceMs: data.maxUtteranceMs };
     }
-
     resetSession();
 
     try {
       await ensureTranscriber();
-      post("ready", {
-        model: config.model,
-        device: DEVICE,
-        dtype: DTYPE,
-        sampleRate: TARGET_SAMPLE_RATE,
-      });
+      post("ready");
     } catch (error) {
       post("error", {
         code: "model-load-failed",
         message: error?.message || "Local caption model failed to load.",
       });
     }
-
     return;
   }
 

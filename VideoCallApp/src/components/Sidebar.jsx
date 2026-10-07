@@ -10,9 +10,7 @@ export const Sidebar = ({
   messageCount,
   trackStatus,
   toggleTrack,
-  captionsSupported = true,
   captionStatus = "idle",
-  captionError,
 }) => {
   const [state] = useContext(ReduxContext);
   const { leaveRoomFunc } = useContext(SocketContext);
@@ -49,29 +47,18 @@ export const Sidebar = ({
   };
 
   const slotBg = isPreview ? "prev-slot" : "meet-slot";
-  const captionsTip = !captionsSupported
-    ? "Live captions unavailable in this browser"
-    : captionError
-      ? captionError.message
-      : captionStatus === "loading"
-        ? "Loading caption model"
-        : panels.captions
-          ? "Turn captions off"
-          : "Turn captions on";
+  const captionsTip = captionStatus === "loading"
+    ? "Loading caption model"
+    : panels.captions
+      ? "Turn captions off"
+      : "Turn captions on";
 
   const meetingButtons = [
     { key: "share", tip: "Share screen", icon: "share", active: false, onClick: () => {} },
     { key: "chat", tip: "Chat", icon: "chat", active: panels.chat, onClick: () => onTogglePanel("chat"), badge: messageCount },
     { key: "participants", tip: "Participants", icon: "participants", active: panels.participants, onClick: () => onTogglePanel("participants") },
     { key: "hand", tip: "Raise hand", icon: "hand", active: false, onClick: () => {} },
-    {
-      key: "captions",
-      tip: captionsTip,
-      icon: "captions",
-      active: panels.captions,
-      onClick: () => onTogglePanel("captions"),
-      disabled: !captionsSupported,
-    },
+    { key: "captions", tip: captionsTip, icon: "captions", active: panels.captions, onClick: () => onTogglePanel("captions") },
     { key: "translate", tip: "Live translate", icon: "translate", active: panels.translate, onClick: () => onTogglePanel("translate") },
   ];
 
@@ -89,11 +76,10 @@ export const Sidebar = ({
             {meetingButtons.map((btn) => (
               <button
                 key={btn.key}
-                className={`sb-btn ${btn.active ? "is-active" : ""} ${btn.disabled ? "is-subdued" : ""}`}
+                className={`sb-btn ${btn.active ? "is-active" : ""}`}
                 data-tip={btn.tip}
                 onClick={btn.onClick}
                 aria-label={btn.tip}
-                disabled={btn.disabled}
               >
                 {btn.badge > 0 && <div className="sb-badge">{btn.badge}</div>}
                 <Icon name={btn.icon} />

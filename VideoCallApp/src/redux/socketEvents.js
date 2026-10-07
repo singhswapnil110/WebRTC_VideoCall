@@ -10,10 +10,8 @@ export const SOCKET_EVENTS = Object.freeze({
   RECEIVE_CAPTION: "receive_caption",
 });
 
-// Wire limits for caption packets. Mirrored in Socket_Server/socketEvents.js —
-// the client clamps to these, the server rejects anything beyond them.
+// Mirrored in Socket_Server/socketEvents.js, which also caps caption ids.
 export const CAPTION_LIMITS = Object.freeze({
   MAX_TEXT_LENGTH: 500,
-  MAX_NAME_LENGTH: 80,
-  MAX_ID_LENGTH: 120,
+  MAX_NAME_LENGTH: 64,
 });

@@ -31,49 +31,28 @@ export const Meeting = () => {
   const { localStream, connections, messages, name, roomID } = state;
   const { status: trackStatus, toggleTrack } = useTrackStatus(localStream);
 
-  const captionsEnabled = Boolean(captionsOn && isConnected && trackStatus.audio);
-
-  const {
-    currentCaption,
-    previousCaption,
-    publishCaption,
-    clearOwnCaption,
-    clearAllCaptions,
-  } = useRoomCaptions({
+  const { currentCaption, previousCaption, publishCaption } = useRoomCaptions({
     socket,
     roomID,
     senderId: socket?.id,
     senderName: name || "You",
-    // Gated on captionsEnabled, not captionsOn, so a result that lands just
-    // after the mic is muted is not broadcast.
-    enabled: captionsEnabled,
+    active: captionsOn,
   });
 
-  const { supported: captionsSupported, status: captionStatus } = useCaptionTranscriber({
-    enabled: captionsEnabled,
+  // Mute is deliberately not part of this: a muted track is silence, which the
+  // engine already treats as the end of an utterance.
+  const { status: captionStatus } = useCaptionTranscriber({
+    enabled: captionsOn && isConnected,
     localStream,
     maxUtteranceMs: 4000,
-    onResult: ({ text, isFinal }) => {
-      publishCaption({ text, isFinal });
-    },
+    onResult: publishCaption,
     onError: setCaptionError,
     onStart: () => setCaptionError(null),
   });
 
-  // Captions off clears the whole bar; muting only drops this user's own
-  // in-progress line.
   useEffect(() => {
-    if (!captionsOn) {
-      clearAllCaptions();
-      setCaptionError(null);
-    }
-  }, [captionsOn, clearAllCaptions]);
-
-  useEffect(() => {
-    if (!trackStatus.audio) {
-      clearOwnCaption();
-    }
-  }, [trackStatus.audio, clearOwnCaption]);
+    if (!captionsOn) setCaptionError(null);
+  }, [captionsOn]);
 
   const panels = {
     chat: activePanel === "chat",
@@ -82,25 +61,18 @@ export const Meeting = () => {
     captions: captionsOn,
   };
 
-  const onTogglePanel = useCallback(
-    (key) => {
-      if (key === "captions") {
-        if (!captionsSupported) return;
-        setCaptionsOn((prev) => !prev);
-        return;
-      }
-      if (key === "chat") setUnreadCount(0);
-      setActivePanel((prev) => (prev === key ? null : key));
-    },
-    [captionsSupported]
-  );
+  const onTogglePanel = useCallback((key) => {
+    if (key === "captions") {
+      setCaptionsOn((prev) => !prev);
+      return;
+    }
+    if (key === "chat") setUnreadCount(0);
+    setActivePanel((prev) => (prev === key ? null : key));
+  }, []);
 
   useEffect(() => {
     let mounted = true;
     navigator.mediaDevices
-      // These constraints apply to the stream sent to every peer, so they stay
-      // at the browser defaults; caption-specific conditioning belongs in the
-      // audio worklet, not in the call's outgoing audio.
       .getUserMedia({ video: true, audio: true })
       .then((stream) => {
         if (!mounted) {
@@ -206,9 +178,7 @@ export const Meeting = () => {
         messageCount={unreadCount}
         trackStatus={trackStatus}
         toggleTrack={toggleTrack}
-        captionsSupported={captionsSupported}
         captionStatus={captionStatus}
-        captionError={captionError}
       />
     </div>
   );

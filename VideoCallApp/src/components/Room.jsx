@@ -16,6 +16,7 @@ const gridLayout = (length) => {
 const CAPTION_STATUS_TEXT = {
   loading: "Preparing live captions…",
   ready: "Captions ready",
+  unsupported: "Your browser can't caption your speech, but others' captions will appear here.",
 };
 
 const CaptionLine = ({ caption }) => {
@@ -114,7 +115,7 @@ export const Room = ({
           </div>
         )}
         {captionsOn && captionError && (
-          <div className="caption-status is-error">{captionError.message}</div>
+          <div className="caption-status is-error" role="alert">{captionError.message}</div>
         )}
         {captionsOn && !captionError && statusCaption && (
           <div className="caption-status">{statusCaption}</div>

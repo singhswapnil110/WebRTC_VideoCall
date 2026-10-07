@@ -488,8 +488,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sb-btn.is-danger { color: var(--red); }
 .sb-btn.is-danger:hover { background: rgba(239,68,68,0.1); }
 .sb-btn.is-active { color: var(--sb-icon-active); background: var(--sb-icon-hover-bg); }
-.sb-btn.is-subdued { color: rgba(255,255,255,0.32); }
-[data-theme="dark"] .sb-btn.is-subdued { color: rgba(0,0,0,0.32); }
 .sb-btn::after {
   content: attr(data-tip);
   position: absolute; left: calc(100% + 16px); top: 50%; transform: translateY(-50%);

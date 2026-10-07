@@ -10,11 +10,10 @@ const SOCKET_EVENTS = Object.freeze({
   RECEIVE_CAPTION: "receive_caption",
 });
 
-// Wire limits for caption packets. Mirrored in
-// VideoCallApp/src/redux/socketEvents.js.
+// Mirrored in VideoCallApp/src/redux/socketEvents.js.
 const CAPTION_LIMITS = Object.freeze({
   MAX_TEXT_LENGTH: 500,
-  MAX_NAME_LENGTH: 80,
+  MAX_NAME_LENGTH: 64,
   MAX_ID_LENGTH: 120,
 });
 

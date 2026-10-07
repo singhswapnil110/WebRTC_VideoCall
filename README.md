@@ -45,15 +45,17 @@ The signaling server's job is room membership — it exchanges peer IDs so clien
 Captions are generated on the speaker's own device and only the resulting text
 is sent to the room — microphone audio never leaves the browser.
 
-Microphone audio is tapped by an `AudioWorklet`, buffered into 2048-sample
-chunks, and passed to a Web Worker running Whisper (`Xenova/whisper-tiny` via
-`@huggingface/transformers`). A simple energy-based voice activity detector
-splits the stream into utterances of at most 4 seconds and emits interim and
-final lines, which are relayed over Socket.IO and rendered for everyone.
+Microphone audio is tapped by an `AudioWorklet` running at 16 kHz, buffered
+into 2048-sample chunks, and passed to a Web Worker running Whisper
+(`Xenova/whisper-tiny` via `@huggingface/transformers`). A simple energy-based
+voice activity detector splits the stream into utterances of at most 4 seconds
+and emits interim and final lines, which are relayed over Socket.IO and
+rendered for everyone who has captions turned on. A live line that stops
+updating for 6 seconds is shown as finished.
 
 **Requirements**
-- `Worker`, `AudioWorkletNode` and `AudioContext`. Without them the captions
-  button is disabled with an explanatory tooltip.
+- `Worker`, `AudioWorkletNode` and `AudioContext` to caption your own speech.
+  Without them you can still turn captions on and read everyone else's.
 - WebGPU is used when available (`fp32`), otherwise the wasm backend (`q8`).
   The wasm path needs `@huggingface/transformers` >= 4.3; the runtime bundled
   with 4.2 cannot build a session for that model export.

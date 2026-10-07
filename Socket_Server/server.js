@@ -20,7 +20,6 @@ const io = new SocketIO(server, {
 });
 const PORT = process.env.PORT || 8002;
 const MAX_MESSAGE_LENGTH = 4000;
-const MAX_CAPTION_TEXT_LENGTH = CAPTION_LIMITS.MAX_TEXT_LENGTH;
 
 app.use(express.static(path.resolve("./public")));
 
@@ -37,9 +36,7 @@ const isUserInRoomOnAnotherSocket = (roomID, userID, socketID) => {
   return false;
 };
 
-// Only the content fields are client-controlled. Identity is stamped from the
-// socket when relaying, so a participant cannot publish captions as someone
-// else or poison another sender's sequence counter.
+// Identity is stamped from the socket on relay, so only content is validated.
 const isValidCaptionContent = (caption) => {
   if (!caption || typeof caption !== "object") return false;
   if (
@@ -52,19 +49,17 @@ const isValidCaptionContent = (caption) => {
   if (
     typeof caption.text !== "string" ||
     caption.text.trim().length === 0 ||
-    caption.text.length > MAX_CAPTION_TEXT_LENGTH
+    caption.text.length > CAPTION_LIMITS.MAX_TEXT_LENGTH
   ) {
     return false;
   }
-  if (typeof caption.isFinal !== "boolean") return false;
-  if (!Number.isInteger(caption.seq) || caption.seq < 1) return false;
-  return true;
+  return typeof caption.isFinal === "boolean";
 };
 
 io.on("connection", (socket) => {
   socket.on(SOCKET_EVENTS.JOIN_ROOM, ({ roomID, userID, userName }) => {
     if (!isValidRoomID(roomID) || typeof userID !== "string" || userID.length === 0) return;
-    const normalizedUserName = typeof userName === "string" ? userName.trim().slice(0, 64) : "";
+    const normalizedUserName = typeof userName === "string" ? userName.trim().slice(0, CAPTION_LIMITS.MAX_NAME_LENGTH) : "";
     socket.join(roomID);
     socket.data.userID = userID;
     socket.data.userName = normalizedUserName;
@@ -97,12 +92,11 @@ io.on("connection", (socket) => {
   socket.on(SOCKET_EVENTS.SEND_CAPTION, ({ roomID, caption }) => {
     if (!isValidRoomID(roomID) || !socket.rooms.has(roomID)) return;
     if (!isValidCaptionContent(caption)) return;
-    // Senders apply their own captions locally, so relay to everyone else only.
+    // Senders render their own captions locally.
     socket.to(roomID).emit(SOCKET_EVENTS.RECEIVE_CAPTION, {
       captionId: caption.captionId,
       text: caption.text,
       isFinal: caption.isFinal,
-      seq: caption.seq,
       senderId: socket.id,
       senderName: socket.data.userName || "",
     });
