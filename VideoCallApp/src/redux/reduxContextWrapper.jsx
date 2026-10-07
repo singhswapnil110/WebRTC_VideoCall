@@ -65,6 +65,18 @@ export const ReduxContextWrapper = ({ children }) => {
       setPeerReady(true);
     });
 
+    // A reconnected client gets a fresh server-side socket that is in no room,
+    // and peers have already dropped us, so rejoin and let them call back.
+    socketInstance.on("connect", () => {
+      const roomID = roomIDRef.current;
+      if (!roomID || !peerRef.current?.id) return;
+      socketInstance.emit(SOCKET_EVENTS.JOIN_ROOM, {
+        roomID,
+        userID: peerRef.current.id,
+        userName: nameRef.current || "You",
+      });
+    });
+
     socketRef.current.on(SOCKET_EVENTS.USER_JOINED, ({ userID, userName }) => {
       if (!localStreamRef.current || !peerRef.current) return;
       const call = peerRef.current.call(userID, localStreamRef.current, {
@@ -113,6 +125,7 @@ export const ReduxContextWrapper = ({ children }) => {
     });
 
     return () => {
+      socketRef.current?.off("connect");
       socketRef.current?.off(SOCKET_EVENTS.USER_JOINED);
       socketRef.current?.off(SOCKET_EVENTS.USER_DISCONNECTED);
       peerRef.current?.off("call");
