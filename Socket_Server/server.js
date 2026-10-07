@@ -26,6 +26,15 @@ server.listen(PORT, () => console.log(`Server started at PORT:${PORT}`));
 
 const isValidRoomID = (roomID) => typeof roomID === "string" && roomID.length > 0 && roomID.length <= 64;
 
+const isUserInRoomOnAnotherSocket = (roomID, userID, socketID) => {
+  const members = io.sockets.adapter.rooms.get(roomID);
+  if (!members || !userID) return false;
+  for (const memberID of members) {
+    if (memberID !== socketID && io.sockets.sockets.get(memberID)?.data.userID === userID) return true;
+  }
+  return false;
+};
+
 io.on("connection", (socket) => {
   socket.on(SOCKET_EVENTS.JOIN_ROOM, ({ roomID, userID, userName }) => {
     if (!isValidRoomID(roomID) || typeof userID !== "string" || userID.length === 0) return;
@@ -59,10 +68,14 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnecting", () => {
+    const { userID } = socket.data;
     for (const room of socket.rooms) {
-      if (room !== socket.id) {
-        socket.to(room).emit("user_disconnected", { userID: socket.data.userID });
-      }
+      if (room === socket.id) continue;
+      // The server can notice a dropped connection only after the client has
+      // already reconnected and rejoined; announcing that stale socket would
+      // tear down the call that was just restored.
+      if (isUserInRoomOnAnotherSocket(room, userID, socket.id)) continue;
+      socket.to(room).emit(SOCKET_EVENTS.USER_DISCONNECTED, { userID });
     }
   });
 });
