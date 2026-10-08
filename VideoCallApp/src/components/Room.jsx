@@ -36,9 +36,12 @@ export const Room = ({
   currentCaption,
   previousCaption,
   localMuted = false,
+  localHandRaised = false,
+  localScreenSharing = false,
+  outputSinkId = "",
 }) => {
   const [state] = useContext(ReduxContext);
-  const { connections, localStream, name } = state;
+  const { connections, localStream, name, raisedHands } = state;
 
   const peers = useMemo(() => Object.values(connections), [connections]);
 
@@ -53,6 +56,8 @@ export const Room = ({
       speaking: false,
       muted: localMuted,
       isLocal: true,
+      handRaised: localHandRaised,
+      isScreenSharing: localScreenSharing,
     });
     peers.forEach((conn) => {
       const shortId = conn.peer?.slice(-4)?.toUpperCase() ?? "??";
@@ -65,10 +70,11 @@ export const Room = ({
         avatarId: conn.peer,
         muted: peerMuted,
         isLocal: false,
+        handRaised: Boolean(raisedHands[conn.peer]?.raised),
       });
     });
     return list;
-  }, [peers, localStream, name, localMuted]);
+  }, [peers, localStream, name, localMuted, localHandRaised, localScreenSharing, raisedHands]);
 
   const { rows, columns } = useMemo(() => gridLayout(tiles.length), [tiles.length]);
 
@@ -87,13 +93,28 @@ export const Room = ({
             className={`v-tile ${tile.speaking ? "speaking" : ""}`}
           >
             {tile.stream ? (
-              <VideoTile stream={tile.stream} isLocal={tile.isLocal} />
+              <VideoTile
+                  stream={tile.stream}
+                  isLocal={tile.isLocal}
+                  sinkId={tile.isLocal ? "" : outputSinkId}
+                  fit={tile.isScreenSharing ? "contain" : "cover"}
+                />
             ) : tile.isLocal ? (
               <NiceAvatar id="local" className="cam-avatar" size={64} />
             ) : (
               <NiceAvatar id={tile.avatarId} className="cam-avatar" size={64} />
             )}
             {tile.name && <span className="v-name">{tile.name}</span>}
+            {tile.isScreenSharing && (
+              <div className="v-share" aria-label="Sharing screen">
+                <Icon name="share" width={10} height={10} strokeWidth={2.5} />
+              </div>
+            )}
+            {tile.handRaised && (
+              <div className="v-hand" aria-label="Hand raised">
+                <Icon name="hand" width={10} height={10} strokeWidth={2.2} />
+              </div>
+            )}
             {tile.muted && (
               <div className="v-muted">
                 <Icon name="micOff" width={10} height={10} strokeWidth={2.5} />

@@ -18,6 +18,16 @@ export const ParticipantsPanel = ({ onClose, participants, localUser }) => {
           <div key={p.id} className="part-item">
             <NiceAvatar id={p.id} className="part-avatar" size={18} />
             <span className="part-name">{p.name}</span>
+            {p.handRaised && (
+              <div className="part-state hand" aria-label="Hand raised">
+                <Icon name="hand" width={12} height={12} />
+              </div>
+            )}
+            {p.isScreenSharing && (
+              <div className="part-state share" aria-label="Screen sharing">
+                <Icon name="share" width={12} height={12} />
+              </div>
+            )}
             <div className={`part-mic ${p.muted ? "muted" : "live"}`} aria-label={p.muted ? "Muted" : "Live"}>
               <Icon name={p.muted ? "micOff" : "mic"} width={12} height={12} />
             </div>

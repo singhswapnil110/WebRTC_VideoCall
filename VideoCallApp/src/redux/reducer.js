@@ -37,12 +37,39 @@ export function reducerFun(state, action) {
       };
     }
 
+    case "SET_RAISED_HANDS":
+      return {
+        ...state,
+        raisedHands: action.payload,
+      };
+
+    case "SET_RAISED_HAND": {
+      const { userID, hand } = action.payload;
+      return {
+        ...state,
+        raisedHands: {
+          ...state.raisedHands,
+          [userID]: hand,
+        },
+      };
+    }
+
+    case "CLEAR_RAISED_HAND": {
+      const raisedHands = { ...state.raisedHands };
+      delete raisedHands[action.payload];
+      return {
+        ...state,
+        raisedHands,
+      };
+    }
+
     case "LEAVE_ROOM":
       return {
         ...state,
         roomID: null,
         connections: {},
         messages: [],
+        raisedHands: {},
       };
 
     case "SET_NAME":

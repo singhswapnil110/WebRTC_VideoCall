@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 
-export const VideoTile = ({ stream, isLocal = false }) => {
+export const VideoTile = ({ stream, isLocal = false, sinkId = "", fit = "cover" }) => {
   const videoRef = useRef();
 
   useEffect(() => {
@@ -18,10 +18,16 @@ export const VideoTile = ({ stream, isLocal = false }) => {
     };
   }, [stream]);
 
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || isLocal || !sinkId || typeof el.setSinkId !== "function") return;
+    el.setSinkId(sinkId).catch(() => {});
+  }, [isLocal, sinkId]);
+
   return (
     <video
       ref={videoRef}
-      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: fit }}
       autoPlay
       muted={isLocal}
       playsInline

@@ -20,6 +20,10 @@ const io = new SocketIO(server, {
 });
 const PORT = process.env.PORT || 8002;
 const MAX_MESSAGE_LENGTH = 4000;
+// PeerJS ids are 36-character UUIDs.
+const MAX_USER_ID_LENGTH = 64;
+// Each hand change is broadcast to the whole room.
+const HAND_CHANGE_INTERVAL_MS = 500;
 
 app.use(express.static(path.resolve("./public")));
 
@@ -34,6 +38,16 @@ const isUserInRoomOnAnotherSocket = (roomID, userID, socketID) => {
     if (memberID !== socketID && io.sockets.sockets.get(memberID)?.data.userID === userID) return true;
   }
   return false;
+};
+
+// Raised hands: room id -> (user id -> hand). In memory only, like the rooms themselves.
+const roomHands = new Map();
+
+const lowerHand = (roomID, userID) => {
+  const hands = roomHands.get(roomID);
+  if (!hands?.delete(userID)) return;
+  if (hands.size === 0) roomHands.delete(roomID);
+  io.to(roomID).emit(SOCKET_EVENTS.RAISED_HAND_UPDATED, { userID, hand: null });
 };
 
 // Identity is stamped from the socket on relay, so only content is validated.
@@ -58,16 +72,18 @@ const isValidCaptionContent = (caption) => {
 
 io.on("connection", (socket) => {
   socket.on(SOCKET_EVENTS.JOIN_ROOM, ({ roomID, userID, userName }) => {
-    if (!isValidRoomID(roomID) || typeof userID !== "string" || userID.length === 0) return;
+    if (!isValidRoomID(roomID) || typeof userID !== "string" || userID.length === 0 || userID.length > MAX_USER_ID_LENGTH) return;
     const normalizedUserName = typeof userName === "string" ? userName.trim().slice(0, CAPTION_LIMITS.MAX_NAME_LENGTH) : "";
     socket.join(roomID);
     socket.data.userID = userID;
     socket.data.userName = normalizedUserName;
     socket.to(roomID).emit(SOCKET_EVENTS.USER_JOINED, { userID, userName: normalizedUserName });
+    socket.emit(SOCKET_EVENTS.ROOM_HAND_STATE, { hands: Object.fromEntries(roomHands.get(roomID) || []) });
   });
 
   socket.on(SOCKET_EVENTS.USER_DISCONNECT, ({ roomID }) => {
     if (!isValidRoomID(roomID)) return;
+    lowerHand(roomID, socket.data.userID);
     socket.to(roomID).emit(SOCKET_EVENTS.USER_DISCONNECTED, { userID: socket.data.userID });
     socket.leave(roomID);
   });
@@ -102,6 +118,23 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on(SOCKET_EVENTS.SET_RAISED_HAND, ({ roomID, raised } = {}) => {
+    const { userID, userName } = socket.data;
+    if (!isValidRoomID(roomID) || !socket.rooms.has(roomID) || !userID || typeof raised !== "boolean") return;
+    const now = Date.now();
+    if (now - (socket.data.lastHandChangeAt || 0) < HAND_CHANGE_INTERVAL_MS) return;
+    socket.data.lastHandChangeAt = now;
+    if (!raised) {
+      lowerHand(roomID, userID);
+      return;
+    }
+    // Identity comes from the socket, as for captions.
+    const hand = { userID, userName: userName || "", raised: true, timestamp: now };
+    if (!roomHands.has(roomID)) roomHands.set(roomID, new Map());
+    roomHands.get(roomID).set(userID, hand);
+    io.to(roomID).emit(SOCKET_EVENTS.RAISED_HAND_UPDATED, { userID, hand });
+  });
+
   socket.on("disconnecting", () => {
     const { userID } = socket.data;
     for (const room of socket.rooms) {
@@ -110,6 +143,7 @@ io.on("connection", (socket) => {
       // already reconnected and rejoined; announcing that stale socket would
       // tear down the call that was just restored.
       if (isUserInRoomOnAnotherSocket(room, userID, socket.id)) continue;
+      lowerHand(room, userID);
       socket.to(room).emit(SOCKET_EVENTS.USER_DISCONNECTED, { userID });
     }
   });
