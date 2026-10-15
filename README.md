@@ -75,13 +75,15 @@ in a worker, and Rollup only guards that for non-IIFE output.
 ```bash
 cd Socket_Server
 npm install
-node server.js        # runs on :8002
+ALLOWED_ORIGINS=http://localhost:5173 node server.js   # runs on :8002
 ```
+`ALLOWED_ORIGINS` is a comma-separated list of app origins. The server will not
+start without it, and it rejects connections from any other browser origin.
 
 **Frontend**
 ```bash
 cd VideoCallApp
 npm install
-cp .env.example .env  # set VITE_SOCKET_URL if needed
+cp .env.example .env  # VITE_SOCKET_URL is required; the example points at the local server
 npm run dev           # runs on :5173
 ```

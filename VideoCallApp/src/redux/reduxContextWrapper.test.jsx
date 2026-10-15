@@ -1,12 +1,13 @@
 import React, { useContext } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render } from "@testing-library/react";
 import { ReduxContext, ReduxContextWrapper, SocketContext } from "./reduxContextWrapper";
 import { SOCKET_EVENTS } from "./socketEvents";
 
-const { mockSocket, peerHandlers } = vi.hoisted(() => {
+const { mockSocket, mockIo, peerHandlers } = vi.hoisted(() => {
   const handlers = {};
   return {
+    mockIo: vi.fn(),
     peerHandlers: {},
     mockSocket: {
       handlers,
@@ -22,7 +23,16 @@ const { mockSocket, peerHandlers } = vi.hoisted(() => {
   };
 });
 
-vi.mock("socket.io-client", () => ({ io: () => mockSocket }));
+vi.mock("socket.io-client", () => ({ io: mockIo }));
+
+beforeEach(() => {
+  vi.stubEnv("VITE_SOCKET_URL", "http://signal.test");
+  mockIo.mockReset().mockReturnValue(mockSocket);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 vi.mock("peerjs", () => ({
   default: class {
@@ -38,8 +48,9 @@ vi.mock("peerjs", () => ({
 let api;
 const Probe = () => {
   const [state, dispatch] = useContext(ReduxContext);
-  const { joinRoomFunc, leaveRoomFunc, setRaisedHand, syncLocalStream, replaceOutgoingTrack } = useContext(SocketContext);
-  api = { state, dispatch, joinRoomFunc, leaveRoomFunc, setRaisedHand, syncLocalStream, replaceOutgoingTrack };
+  const { joinRoomFunc, leaveRoomFunc, setRaisedHand, syncLocalStream, replaceOutgoingTrack, socketReady, socketError } =
+    useContext(SocketContext);
+  api = { state, dispatch, joinRoomFunc, leaveRoomFunc, setRaisedHand, syncLocalStream, replaceOutgoingTrack, socketReady, socketError };
   return null;
 };
 
@@ -168,5 +179,34 @@ describe("ReduxContextWrapper calls", () => {
     act(() => callHandlers.close());
 
     expect(api.state.raisedHands).toEqual({ "peer-2": hand });
+  });
+});
+
+describe("ReduxContextWrapper signaling connection", () => {
+  it("does not fall back to a default server when VITE_SOCKET_URL is missing", () => {
+    vi.stubEnv("VITE_SOCKET_URL", " ");
+    renderWrapper();
+
+    expect(mockIo).not.toHaveBeenCalled();
+    expect(api.socketReady).toBe(false);
+    expect(api.socketError).toMatch(/VITE_SOCKET_URL/);
+  });
+
+  it("connects to the configured server and reports its state", () => {
+    renderWrapper();
+    expect(mockIo).toHaveBeenCalledWith("http://signal.test");
+    expect(api.socketReady).toBe(false);
+    expect(api.socketError).toBe("");
+
+    act(() => mockSocket.handlers.connect_error(new Error("refused")));
+    expect(api.socketReady).toBe(false);
+    expect(api.socketError).toMatch(/Could not reach/);
+
+    act(() => mockSocket.handlers.connect());
+    expect(api.socketReady).toBe(true);
+    expect(api.socketError).toBe("");
+
+    act(() => mockSocket.handlers.disconnect());
+    expect(api.socketReady).toBe(false);
   });
 });
